@@ -15,5 +15,10 @@ manifest:
     - name: zmk-driver-azoteq-iqs5xx
       remote: fustopoke
       revision: k04-polling
+    # Colored battery / BT profile / connection blinks on the onboard
+    # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
+    - name: zmk-smart-rgbled-widget
+      remote: ergohaven
+      revision: main
   self:
     path: config

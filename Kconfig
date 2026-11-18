@@ -1,6 +1,6 @@
 menuconfig K04_STATUS_LED
     bool "K:04 Mini single status LED widget"
-    default y
+    default n
     help
       Battery level, Bluetooth profile, and connection indications on the
       K:04 Mini onboard PWM LED, using blink counts and pace instead of

@@ -2,10 +2,18 @@ manifest:
   remotes:
     - name: ergohaven
       url-base: https://github.com/ergohaven
+    # YOUR_GH_USER is replaced with your GitHub login by the setup commands.
+    - name: YOUR_GH_USER
+      url-base: https://github.com/YOUR_GH_USER
   projects:
     - name: ergohaven-zmk
       remote: ergohaven
       revision: main
       import: config/west.yml
+    # Azoteq IQS5xx touchpad driver — fork carrying the polling-mode patch
+    # for the K:04 module socket (RDY line is not routed to the MCU).
+    - name: zmk-driver-azoteq-iqs5xx
+      remote: YOUR_GH_USER
+      revision: k04-polling
   self:
     path: config

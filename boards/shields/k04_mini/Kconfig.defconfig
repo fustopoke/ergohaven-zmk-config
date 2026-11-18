@@ -1,0 +1,19 @@
+if SHIELD_K04_MINI_LEFT
+
+config ZMK_KEYBOARD_NAME
+    default "EH K:04 Mini"
+
+config ZMK_SPLIT_ROLE_CENTRAL
+    default y
+
+endif
+
+if SHIELD_K04_MINI_LEFT || SHIELD_K04_MINI_RIGHT
+
+config ZMK_SPLIT
+    default y
+
+config ZMK_POINTING
+    default y
+
+endif

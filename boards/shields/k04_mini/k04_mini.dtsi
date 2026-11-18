@@ -9,9 +9,45 @@
  */
 
 #include <dt-bindings/zmk/matrix_transform.h>
+#include <zephyr/dt-bindings/pinctrl/nrf-pinctrl.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 #include "k04_mini_layout.dtsi"
 
+/* Onboard status LED: PWM0 channel 0 on P0.30, the same pin RMK drives. */
+&pinctrl {
+    k04_pwm0_default: k04_pwm0_default {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 30)>;
+        };
+    };
+
+    k04_pwm0_sleep: k04_pwm0_sleep {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 30)>;
+            low-power-enable;
+        };
+    };
+};
+
+&pwm0 {
+    status = "okay";
+    pinctrl-0 = <&k04_pwm0_default>;
+    pinctrl-1 = <&k04_pwm0_sleep>;
+    pinctrl-names = "default", "sleep";
+};
+
 / {
+    aliases {
+        k04-status-led = &status_led;
+    };
+
+    k04_status_leds {
+        compatible = "pwm-leds";
+        status_led: status_led {
+            pwms = <&pwm0 0 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+        };
+    };
+
     chosen {
       zmk,kscan = &kscan0;
       zmk,physical-layout = &physical_layout;

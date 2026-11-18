@@ -62,6 +62,12 @@
         compatible = "azoteq,iqs5xx";
         reg = <0x74>;
 
+        /* Module orientation: rotate reported motion 90° clockwise
+         * (switch-xy + flip-x), then invert up/down (flip-y). */
+        switch-xy;
+        flip-x;
+        flip-y;
+
         one-finger-tap;
         press-and-hold;
         press-and-hold-time = <250>;

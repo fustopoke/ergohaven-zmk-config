@@ -36,6 +36,9 @@
         group1 {
             psels = <NRF_PSEL(TWIM_SDA, 0, 24)>,
                 <NRF_PSEL(TWIM_SCL, 0, 13)>;
+            /* RMK enables internal SDA/SCL pull-ups on the K:04
+             * touchpad module; match that bus configuration. */
+            bias-pull-up;
         };
     };
 
@@ -67,7 +70,10 @@
     };
 };
 
-&touchpad_listener {
+&touchpad_split {
+    /* Peripheral side of the split input relay: attach the touchpad
+     * to split channel 0 so its events travel to the central half.
+     * (Same wiring as ergohaven's velvet_v3_ui_right_qube overlay.) */
     status = "okay";
     device = <&k04_touchpad>;
 };

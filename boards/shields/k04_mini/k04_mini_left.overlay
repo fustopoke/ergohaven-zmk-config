@@ -1,5 +1,17 @@
 #include "k04_mini.dtsi"
 
+/* Central side of the split input relay: the zmk,input-split node with
+ * no device becomes the receiving virtual device for the right half's
+ * touchpad; the input listener processes its events into HID reports. */
+&touchpad_split {
+    status = "okay";
+};
+
+&touchpad_listener {
+    status = "okay";
+    device = <&touchpad_split>;
+};
+
 &kscan0 {
     compatible = "zmk,kscan-gpio-matrix";
 

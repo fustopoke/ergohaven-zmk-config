@@ -17,8 +17,9 @@ manifest:
       revision: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
+    # Fork branch carrying the ZMK v0.3 compatibility patch.
     - name: zmk-smart-rgbled-widget
-      remote: ergohaven
-      revision: main
+      remote: fustopoke
+      revision: v0.3-compat
   self:
     path: config

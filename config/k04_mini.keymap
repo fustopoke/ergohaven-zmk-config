@@ -63,13 +63,13 @@
             mods = <(MOD_LGUI)>;
         };
 
-        /* ru-layer pinkie key: "/" on tap (Shift+Backslash in the
-         * Russian OS layout), "?" with Shift held (Shift+7). */
-        slash_q: slash_q {
+        /* ru-layer key right of ю: "." on tap (slash scancode through the
+         * Russian OS layout), "," with Shift held (shift+slash). */
+        dot_comma: dot_comma {
             compatible = "zmk,behavior-mod-morph";
-            label = "SLASH_Q";
+            label = "DOT_COMMA";
             #binding-cells = <0>;
-            bindings = <&kp LS(BSLH)>, <&kp LS(N7)>;
+            bindings = <&kp RU_DOT>, <&kp RU_COMMA>;
 
             mods = <(MOD_LSFT)>;
         };
@@ -160,7 +160,7 @@
 
         en {
             bindings = <
-&gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &none
+&gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &lg_tog
 &kp TAB    &kp A     &kp S      &kp D  &kp F      &kp G                    &kp H      &kp J  &kp K      &kp L     &kp SEMI  &kp SQT
 &kp LSHFT  &kp Z     &kp X      &kp C  &kp V      &kp B  &trans  &trans    &kp N      &kp M  &kp COMMA  &kp DOT   &kp SQT   &kp RSHFT
 &kp LALT   &kp LGUI  &kp LCTRL  &mo 2  &lg_space                           &kp ENTER  &mo 3  &kp BSPC   &kp LBKT  &kp RBKT
@@ -172,9 +172,9 @@
         ru {
             display-name = "Ru";
             bindings = <
-&gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &none
+&gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &lg_tog
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
-&kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_COMMA         &kp RU_DOT             &slash_q                  &kp RSHFT
+&kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &dot_comma                  &kp RSHFT
 &kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &mo 4                      &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
             >;
         };

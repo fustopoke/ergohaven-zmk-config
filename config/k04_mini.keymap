@@ -14,15 +14,17 @@
  *   6 pointing
  *
  * Language switching (macOS toggle model):
- *   - Cmd+Space on the spacebar (mod-morph lg_space) flips the OS input
+ *   - Ctrl+Space on the spacebar (mod-morph lg_space) flips the OS input
  *     source and the keyboard layer together;
  *   - E+R combo on either base layer does the same;
+ *   - the top-right key on each base layer goes to the other language;
  *   - adj layer has explicit RU / EN keys.
- * The OS shortcut is sent by the `os_lang_tog` macro (Cmd+Space). If your
- * input-source shortcut differs, change that one macro.
- * ergohaven's original uses unconditional Ctrl+Shift+1/2 selectors — swap
- * the os_lang_tog body for `&kp LS(LC(N1))` / `&kp LS(LC(N2))` to use that
- * model (requires OS-side configuration).
+ * The OS shortcut is sent by the `os_lang_tog` macro (Ctrl+Space, the
+ * macOS default for "Select the previous input source"; Cmd+Space is
+ * Spotlight). If your input-source shortcut differs, change that one
+ * macro. ergohaven's original uses unconditional Ctrl+Shift+1/2
+ * selectors — swap the os_lang_tog body for `&kp LS(LC(N1))` /
+ * `&kp LS(LC(N2))` to use that model (requires OS-side configuration).
  *
  * Symbols that don't exist in the Russian layout (like { } & $ ~ @ ^) are
  * typed through the parameterized `&en` macro: it switches the OS to
@@ -60,7 +62,7 @@
             #binding-cells = <0>;
             bindings = <&kp SPACE>, <&lg_tog>;
 
-            mods = <(MOD_LGUI)>;
+            mods = <(MOD_LCTL)>;
         };
 
         /* ru-layer key right of ю: "." on tap (slash scancode through the
@@ -99,7 +101,7 @@
             compatible = "zmk,behavior-macro";
             label = "OS_LANG_TOG";
             #binding-cells = <0>;
-            bindings = <&kp LG(SPACE)>;
+            bindings = <&kp LC(SPACE)>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
@@ -160,7 +162,7 @@
 
         en {
             bindings = <
-&gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &lg_tog
+&gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &layer_ru
 &kp TAB    &kp A     &kp S      &kp D  &kp F      &kp G                    &kp H      &kp J  &kp K      &kp L     &kp SEMI  &kp SQT
 &kp LSHFT  &kp Z     &kp X      &kp C  &kp V      &kp B  &trans  &trans    &kp N      &kp M  &kp COMMA  &kp DOT   &kp SQT   &kp RSHFT
 &kp LALT   &kp LGUI  &kp LCTRL  &mo 2  &lg_space                           &kp ENTER  &mo 3  &kp BSPC   &kp LBKT  &kp RBKT
@@ -172,7 +174,7 @@
         ru {
             display-name = "Ru";
             bindings = <
-&gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &lg_tog
+&gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &layer_en
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
 &kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &dot_comma                  &kp RSHFT
 &kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &mo 4                      &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
@@ -192,9 +194,9 @@
 
         sym_en {
             bindings = <
-&trans  &kp AT    &none      &kp EQUAL  &none     &kp GRAVE                    &kp CARET  &kp DQT   &kp UNDER  &kp SQT   &trans    &trans
-&trans  &trans    &kp LPAR   &kp MINUS  &kp RPAR  &kp PLUS                     &kp PRCNT  &kp LBRC  &kp SEMI   &kp RBRC  &kp EXCL  &trans
-&none   &kp HASH  &kp ASTRK  &kp COLON  &none     &none      &trans  &trans    &none      &none     &kp TILDE  &kp AMPS  &kp DLLR  &none
+&trans  &kp AT    &kp LT     &kp EQUAL  &kp GT    &kp GRAVE                    &kp CARET  &kp DQT   &kp UNDER  &kp SQT   &trans    &trans
+&trans  &kp BSLH  &kp LPAR   &kp MINUS  &kp RPAR  &kp PLUS                     &kp PRCNT  &kp LBRC  &kp SEMI   &kp RBRC  &kp EXCL  &trans
+&none   &kp HASH  &kp ASTRK  &kp COLON  &kp FSLH  &none      &trans  &trans    &none      &kp PIPE  &kp TILDE  &kp AMPS  &kp DLLR  &none
 &trans  &trans    &trans     &mo 5      &trans                                 &trans     &trans    &trans     &trans    &trans
             >;
 
@@ -204,9 +206,9 @@
         sym_ru {
             display-name = "Symbols (Ru)";
             bindings = <
-&trans  &en AT    &none         &kp EQUAL     &none     &en GRAVE                    &en CARET  &kp RU_DQT  &kp UNDER    &en SQT   &trans    &trans
-&trans  &trans    &kp LPAR      &kp MINUS     &kp RPAR  &kp PLUS                     &kp PRCNT  &en LBRC    &kp RU_SEMI  &en RBRC  &kp EXCL  &trans
-&none   &en HASH  &kp RU_ASTRK  &kp RU_COLON  &none     &none      &trans  &trans    &none      &none       &en TILDE    &en AMPS  &en DLLR  &none
+&trans  &en AT    &en LT        &kp EQUAL     &en GT    &en GRAVE                    &en CARET  &kp RU_DQT  &kp UNDER    &en SQT   &trans    &trans
+&trans  &kp RU_BSLH  &kp LPAR   &kp MINUS     &kp RPAR  &kp PLUS                     &kp PRCNT  &en LBRC    &kp RU_SEMI  &en RBRC  &kp EXCL  &trans
+&none   &en HASH  &kp RU_ASTRK  &kp RU_COLON  &kp RU_FSLH  &none  &trans  &trans     &none      &en PIPE    &en TILDE    &en AMPS  &en DLLR  &none
 &trans  &trans    &trans        &mo 5         &trans                                 &trans     &trans      &trans       &trans    &trans
             >;
         };

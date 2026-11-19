@@ -16,9 +16,11 @@
  * Language switching (macOS toggle model):
  *   - Ctrl+Space on the spacebar (mod-morph lg_space) flips the OS input
  *     source and the keyboard layer together;
- *   - E+R combo on either base layer does the same;
  *   - the top-right key on each base layer goes to the other language;
- *   - adj layer has explicit RU / EN keys.
+ *   - adj layer: explicit RU / EN keys, and SYNC (&os_lang_tog) which
+ *     flips ONLY the OS input source — press it once when the Mac and
+ *     the keyboard disagree (e.g. after boot) to re-align the Mac with
+ *     the current layer.
  * The OS shortcut is sent by the `os_lang_tog` macro (Ctrl+Space, the
  * macOS default for "Select the previous input source"; Cmd+Space is
  * Spotlight). If your input-source shortcut differs, change that one
@@ -65,33 +67,16 @@
             mods = <(MOD_LCTL)>;
         };
 
-        /* ru-layer key right of ю: "." on tap (slash scancode through the
-         * Russian OS layout), "," with Shift held (shift+slash). */
-        dot_comma: dot_comma {
-            compatible = "zmk,behavior-mod-morph";
-            label = "DOT_COMMA";
-            #binding-cells = <0>;
-            bindings = <&kp RU_DOT>, <&kp RU_COMMA>;
-
-            mods = <(MOD_LSFT)>;
-        };
+        /* ru-layer key right of ю: a plain slash scancode types "." in
+         * the Russian OS layout and "," with Shift — the standard
+         * bilingual /? key, no macro needed. The en layer's C11 uses
+         * the same scancode ("/" and "?" in English). */
     };
 
-    combos {
-        compatible = "zmk,combos";
-
-        cmbru {
-            bindings = <&layer_ru>;
-            key-positions = <3 4>;
-            layers = <0>;
-        };
-
-        cmben {
-            bindings = <&layer_en>;
-            key-positions = <3 4>;
-            layers = <1>;
-        };
-    };
+    /* No combos: the previous E+R language combo (key-positions 3 4)
+     * misfired on fast "er"/"re" typing rolls and switched the language
+     * mid-word. Use the top-right key, Ctrl+Space, or the Adjust-layer
+     * RU/EN/SYNC keys instead. */
 
     macros {
         /* Sends the OS input-source toggle. Change here if your
@@ -164,7 +149,7 @@
             bindings = <
 &gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &layer_ru
 &kp TAB    &kp A     &kp S      &kp D  &kp F      &kp G                    &kp H      &kp J  &kp K      &kp L     &kp SEMI  &kp SQT
-&kp LSHFT  &kp Z     &kp X      &kp C  &kp V      &kp B  &trans  &trans    &kp N      &kp M  &kp COMMA  &kp DOT   &kp SQT   &kp RSHFT
+&kp LSHFT  &kp Z     &kp X      &kp C  &kp V      &kp B  &trans  &trans    &kp N      &kp M  &kp COMMA  &kp DOT   &kp FSLH   &kp RSHFT
 &kp LALT   &kp LGUI  &kp LCTRL  &mo 2  &lg_space                           &kp ENTER  &mo 3  &kp BSPC   &kp LBKT  &kp RBKT
             >;
 
@@ -176,7 +161,7 @@
             bindings = <
 &gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &layer_en
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
-&kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &dot_comma                  &kp RSHFT
+&kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &kp FSLH                  &kp RSHFT
 &kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &mo 4                      &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
             >;
         };
@@ -217,7 +202,7 @@
             bindings = <
 &bootloader  &trans  &kp F1  &kp F2   &kp F3   &kp F4                     &bt BT_SEL 0  &bt BT_SEL 1  &bt BT_SEL 2      &bt BT_SEL 3  &bt BT_SEL 4  &bt BT_CLR_ALL
 &trans       &trans  &kp F5  &kp F6   &kp F7   &kp F8                     &out OUT_BLE  &kp C_VOL_DN  &kp C_MUTE        &kp C_VOL_UP  &layer_ru     &layer_en
-&trans       &trans  &kp F9  &kp F10  &kp F11  &kp F12  &trans  &trans    &out OUT_USB  &kp C_PREV    &kp C_PLAY_PAUSE  &kp C_NEXT    &trans        &ind_bat
+&trans       &trans  &kp F9  &kp F10  &kp F11  &kp F12  &trans  &trans    &out OUT_USB  &kp C_PREV    &kp C_PLAY_PAUSE  &kp C_NEXT    &os_lang_tog        &ind_bat
 &trans       &trans  &trans  &trans   &trans                              &trans        &trans        &trans            &trans        &trans
             >;
 

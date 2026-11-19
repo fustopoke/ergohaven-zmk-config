@@ -65,12 +65,19 @@ Pick one, rebuild, flash **both** halves.
 ## Switch 2 — the spacebar chord (one line)
 
 Holding the OS key and tapping space switches layout *and* layer together
-(`&lg_space`, a mod-morph). The modifier it watches has to match Switch 1:
+(`&lg_space`, a mod-morph). The modifier it watches has to be **exactly** the
+one Switch 1 sends, because the morph adds its own copy of that modifier on
+top of the key you are holding:
 
 ```c
 mods = <(MOD_LGUI)>;   /* Linux / Windows — Super */
 mods = <(MOD_LCTL)>;   /* macOS — Ctrl */
 ```
+
+If you hold Ctrl while the macro emits `Super+Space`, the host sees a
+`Ctrl+Super+Space` chord and matches no binding at all — the key appears dead
+and nothing reports an error. This is the failure mode to check first if a
+language key "does nothing" after you change presets.
 
 ## Host-side requirements
 
@@ -169,12 +176,30 @@ This is what upstream `k03_ruen.keymap` does.
   and side buttons on the home-row fingers while held. The touchpad's own
   taps/scroll work on every layer regardless.
 
-## Building
+## The other RuEn keymaps in this folder
+
+`k03_ruen.keymap`, `op36_ruen.keymap`, `imperial44_ruen.keymap` and
+`velvet_v3_ui_ruen.keymap` are Ergo Haven's upstream RuEn references. They
+switch language with `Ctrl+Shift+1` / `Ctrl+Shift+2`, i.e. macOS absolute
+layout-slot selection, and they only work if you assign those two shortcuts in
+macOS. `build.yaml` does not build any of them — this repo only builds the
+`k04_mini_*` shields — so treat them as reading material, and copy the
+`os_lang_tog` structure from `k04_mini.keymap` if you ever want one of them to
+be host-neutral too.
+
+## Building and flashing
 
 `build.yaml` produces three artifacts from the GitHub Actions run:
 `k04_mini_left` (central, ZMK Studio enabled over USB), `k04_mini_right`
 (peripheral, owns the touchpad) and `settings_reset`. Flash `settings_reset`
 once per half when moving between major config revisions, then the two half
-images. `config/k04_mini.conf` is applied to **both** halves (ZMK strips the
-`_left`/`_right` suffix when looking for the shield's Kconfig fragment), so
-put shared settings there and role-specific ones in the overlay instead.
+images.
+
+`config/k04_mini.conf` is applied to **both** halves: ZMK also tries the
+shield's *directory* name (`k04_mini`) as a config candidate, not just the
+instance names (`k04_mini_left`, `k04_mini_right`). Keep shared settings
+there. For something that should only affect one half, either add
+`config/k04_mini_left.conf` / `config/k04_mini_right.conf` (applied in
+addition to the shared one) or, better, express it in devicetree — the two
+halves already have separate overlays, and a pointing-device or LED setting
+that differs between them is usually a wiring fact, not a build flag.

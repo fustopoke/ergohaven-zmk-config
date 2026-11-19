@@ -69,12 +69,16 @@
         };
 
         /* HOST SETUP #2 (see CROSS_OS.md): which modifier held over the
-         * spacebar means "switch input source". It must match the preset
-         * chosen in &os_lang_tog below:
+         * spacebar means "switch input source". It must be EXACTLY the
+         * modifier that &os_lang_tog sends below, because the morph reuses
+         * that key press: the physically held modifier and the one the macro
+         * emits combine into the chord the host sees.
          *   Linux / Windows (Super+Space)  -> MOD_LGUI   (current)
          *   macOS (Ctrl+Space)             -> MOD_LCTL
-         * The morph exists so that the gesture switches the layout *and*
-         * the keyboard layer; a plain space is sent otherwise. */
+         * Mixing them is the classic silent failure: hold Ctrl, morph sends
+         * Super+Space, host sees Ctrl+Super+Space and recognises nothing.
+         * The morph exists so that the gesture switches the layout *and* the
+         * keyboard layer; a plain space is sent otherwise. */
         lg_space: lg_space {
             compatible = "zmk,behavior-mod-morph";
             label = "LG_SPACE";

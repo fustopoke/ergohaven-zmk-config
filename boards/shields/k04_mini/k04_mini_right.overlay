@@ -73,6 +73,9 @@
         press-and-hold-time = <250>;
         two-finger-tap;
         scroll;
+        /* Inverted (traditional) scrolling: content moves against the
+         * fingers, like a mouse wheel. */
+        natural-scroll-y;
     };
 };
 

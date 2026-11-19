@@ -23,10 +23,11 @@
  *     and keyboard layer together;
  *   - the top-right key (A11) on each base layer goes to the other
  *     language;
- *   - adj layer: explicit RU / EN keys, and SYNC (&os_lang_tog) which
- *     flips ONLY the OS input source — press it once when the OS and
- *     the keyboard disagree (e.g. after boot) to re-align the OS with
- *     the current layer.
+ *   - adj layer: explicit RU / EN keys, SYNC (&os_lang_tog) which flips
+ *     ONLY the OS input source, and — right thumb outermost key on the
+ *     Adjust layer — &k04_layer_led 0 2 toggles the always-lit white
+ *     base light off/on (layer colors, profile blinks and all other
+ *     indicators keep working while the base light is off).
  * If your conventions differ, adjust the two halves of os_lang_tog
  * only.
  *
@@ -213,7 +214,7 @@
 &bootloader  &trans  &kp F1  &kp F2   &kp F3   &kp F4                     &bt BT_SEL 0  &bt BT_SEL 1  &bt BT_SEL 2      &bt BT_SEL 3  &bt BT_SEL 4  &bt BT_CLR_ALL
 &trans       &trans  &kp F5  &kp F6   &kp F7   &kp F8                     &out OUT_BLE  &kp C_VOL_DN  &kp C_MUTE        &kp C_VOL_UP  &layer_ru     &layer_en
 &trans       &trans  &kp F9  &kp F10  &kp F11  &kp F12  &trans  &trans    &out OUT_USB  &kp C_PREV    &kp C_PLAY_PAUSE  &kp C_NEXT    &os_lang_tog        &ind_bat
-&trans       &trans  &trans  &trans   &trans                              &trans        &trans        &trans            &trans        &trans
+&trans       &trans  &trans  &trans   &trans                              &trans        &trans        &trans            &trans        &k04_layer_led 0 2
             >;
 
             display-name = "Adjust";

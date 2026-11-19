@@ -30,6 +30,15 @@
  * The K:04 module socket does not route the chip's RDY line to the MCU,
  * so the driver runs in polling mode (k04-polling branch of the
  * zmk-driver-azoteq-iqs5xx fork referenced in config/west.yml).
+ *
+ * CROSS-OS RULE FOR THIS NODE
+ *   Everything that describes how the *chip is mounted* (switch-xy, flip-x,
+ *   flip-y, press-and-hold-time, the filter strengths) belongs here — it is
+ *   identical on every host. Everything that describes a *host convention*
+ *   (which way scrolling should go) must NOT be baked in: macOS, GNOME and
+ *   Windows each have their own "natural scrolling" setting and invert the
+ *   events themselves. So the firmware emits the touchpad convention —
+ *   content tracks the fingers — and the OS decides from there.
  */
 &pinctrl {
     k04_i2c1_default: k04_i2c1_default {
@@ -62,20 +71,55 @@
         compatible = "azoteq,iqs5xx";
         reg = <0x74>;
 
-        /* Module orientation: rotate reported motion 90° clockwise
-         * (switch-xy + flip-x), then invert up/down (flip-y). */
+        /* ---- mounting orientation (identical on every OS) ----
+         * The module is rotated 90° relative to the keyboard, so the two
+         * axes have to be swapped and one or both inverted. If the cursor
+         * ever feels mirrored on diagonals — straight down-right finger
+         * motion drifts to down-LEFT — then this triple is over-constrained:
+         * swap plus TWO flips is a reflection, while a rotation needs swap
+         * plus ONE flip. Drop the flip that came from the "invert up/down"
+         * step (flip-y) and re-test before touching anything else.
+         */
         switch-xy;
         flip-x;
         flip-y;
 
         one-finger-tap;
         press-and-hold;
+        /* How long a finger must rest on the surface before it counts as a
+         * click-and-hold (drag) instead of a tap. 250ms is a comfortable
+         * click; raise it if taps keep turning into drags. */
         press-and-hold-time = <250>;
         two-finger-tap;
         scroll;
-        /* Inverted (traditional) scrolling: content moves against the
-         * fingers, like a mouse wheel. */
-        natural-scroll-y;
+
+        /* ---- scrolling direction ----
+         * The driver default on Y is "content tracks the fingers"
+         * ("natural" scrolling), which is the touchpad convention on
+         * macOS, GNOME and Windows 11. All three hosts ship a setting for
+         * it, so change it there rather than here and the same firmware
+         * stays right on every machine.
+         *
+         * Only if a host has no such setting and scrolling really runs the
+         * wrong way, uncomment one of these:
+         *
+         *     natural-scroll-y;    // Y: content moves against the fingers
+         *     natural-scroll-x;    // X: the default here is already natural
+         */
+
+        /* ---- signal conditioning (chip side, same on every OS) ----
+         * bottom-beta: filtering at slow finger speeds. 0 = smoothest but
+         * laggy, 255 = rawest and twitchiest. Hosts that apply pointer
+         * acceleration (Linux desktop defaults, Windows "enhance pointer
+         * precision") amplify jitter, so if the cursor crawls on its own,
+         * lower this first; if it feels mushy at the start of a stroke,
+         * raise it.
+         * stationary-threshold: how far the finger must move, in pixels,
+         * before it counts as moving at all. This is the dead zone you feel
+         * when starting a slow drag. Default 5; 3 is snappier.
+         */
+        bottom-beta = <5>;
+        stationary-threshold = <5>;
     };
 };
 

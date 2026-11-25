@@ -10,7 +10,7 @@ halves disconnecting at random times.
 
 ## What each patch fixes
 
-### `0001-widget-stop-LED-poll-from-defeating-sleep.patch`
+### `0001-widget-sleep-gating-frame-dedupe-spec-led-language.patch`
 `zmk-smart-rgbled-widget` @ `5fd554d` (branch `v0.3-compat`)
 
 - The 30 ms poll thread hammered the WS2812 through the underglow
@@ -25,10 +25,22 @@ halves disconnecting at random times.
   peripheral clears its received color on link loss, and ZMK v0.3 has
   no "peripheral reconnected" event — previously the right LED stayed
   dark after a dropout until the next layer switch.
+- Low-battery red blink threshold is now Kconfig
+  `RGBLED_WIDGET_LOW_BATTERY_LEVEL` (default 20) to match the official
+  Ergo Haven K:04 status language ("red blink every 2 s at 20% or
+  below, not charging"); the pinned module hard-coded 10%. The 2 s
+  intervals themselves are set in `config/k04_mini.conf`.
 
-### `0002-iqs5xx-park-polling-while-ZMK-sleeps-back-off-on-dead-chip.patch`
+### `0002-iqs5xx-chip-reset-self-heal-and-sleep-gated-polling.patch`
 `zmk-driver-azoteq-iqs5xx` @ `2af5a3e` (branch `k04-polling`)
 
+- **Touchpad died after 5–10 minutes of use, permanently**: whenever
+  the chip self-resets (watchdog/EMI — visible to the driver as the
+  SHOW_RESET flag), the pinned driver only *acknowledges* the reset and
+  leaves the chip at factory defaults — event mode off, no gestures,
+  dead until reboot. The patch replays `iqs5xx_setup_device()` on
+  reset detection (and after resuming a parked poll), so the touchpad
+  recovers within one polling cycle (~16 ms).
 - The I2C polling loop (the K:04 module socket does not route RDY) ran
   at 16 ms forever — including through ZMK sleep, which defeats the
   point of sleeping, and against an absent module, which just burns
@@ -50,14 +62,14 @@ gh repo fork fustopoke/zmk-driver-azoteq-iqs5xx  --clone=false
 git clone https://github.com/<you>/zmk-smart-rgbled-widget
 cd zmk-smart-rgbled-widget
 git checkout v0.3-compat
-git am /path/to/this/repo/patches/0001-widget-stop-LED-poll-from-defeating-sleep.patch
+git am /path/to/this/repo/patches/0001-widget-sleep-gating-frame-dedupe-spec-led-language.patch
 git push origin v0.3-compat
 cd ..
 
 git clone https://github.com/<you>/zmk-driver-azoteq-iqs5xx
 cd zmk-driver-azoteq-iqs5xx
 git checkout k04-polling
-git am /path/to/this/repo/patches/0002-iqs5xx-park-polling-while-ZMK-sleeps-back-off-on-dead-chip.patch
+git am /path/to/this/repo/patches/0002-iqs5xx-chip-reset-self-heal-and-sleep-gated-polling.patch
 git push origin k04-polling
 ```
 

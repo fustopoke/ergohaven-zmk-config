@@ -1,32 +1,67 @@
-From 86f728dd44ef3654a21b5456ff700e07f41a47dd Mon Sep 17 00:00:00 2001
+From 91a33f8848eaeb2819d217a38d519fac84f752d4 Mon Sep 17 00:00:00 2001
 From: arazyan <arazdatas@gmail.com>
-Date: Wed, 25 Nov 2026 17:02:07 +0300
-Subject: [PATCH] widget: stop the LED poll from defeating sleep
+Date: Wed, 25 Nov 2026 17:43:42 +0300
+Subject: [PATCH] widget: sleep-gated LED polling, frame dedupe, spec status
+ language
 
-Three fixes for the battery drain and the dark right-half LED after a
-split dropout:
+Battery + K:04 status-language fixes:
 
 - apply_hsb() dedupes identical frames (re-applied every 2 s so a
   corrupted write self-heals). The persistent-display path used to call
   select_effect+set_hsb+on() every 30 ms with the same color; on()
   restarts the underglow refresh timer each time.
 - The poll thread blocks on a semaphore (no timeout) while the half is
-  asleep, and on SLEEP the widget now calls zmk_rgb_underglow_off() so
-  the underglow 50 ms strip-refresh timer stops too. A 30 ms k_msleep
+  asleep, and on SLEEP the widget calls zmk_rgb_underglow_off() so the
+  underglow 50 ms strip-refresh timer stops too. A 30 ms k_msleep
   forever was waking both halves 33x/s and prevented deep idle.
-- The central re-pushes the right-half color every ~5 s even when it
-  did not change: the peripheral clears its color on link loss and
-  ZMK v0.3 gives the central no reconnect event, so the right LED
-  stayed dark after a dropout until the next layer change.
+- The central re-pushes the right-half color every ~5 s: the split
+  peripheral clears its color on link loss and ZMK v0.3 has no
+  reconnect event, so the right LED stayed dark after a dropout.
+- Low-battery red blink threshold 10 -> Kconfig
+  RGBLED_WIDGET_LOW_BATTERY_LEVEL (default 20) to match the official
+  Ergo Haven K:04 status language.
 ---
- src/widget.c | 71 ++++++++++++++++++++++++++++++++++++++++++++++------
- 1 file changed, 64 insertions(+), 7 deletions(-)
+ Kconfig      |  9 ++++++
+ src/widget.c | 82 +++++++++++++++++++++++++++++++++++++++++++++-------
+ 2 files changed, 80 insertions(+), 11 deletions(-)
 
+diff --git a/Kconfig b/Kconfig
+index 8208064..93e8dc2 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -306,6 +306,15 @@ config RGBLED_WIDGET_PERSISTENT_BRIGHTNESS
+     range 0 100
+     default 30
+ 
++config RGBLED_WIDGET_LOW_BATTERY_LEVEL
++    int "Battery level percentage at/below which the red warning blink runs"
++    range 1 100
++    default 20
++    help
++      Red warning blink threshold. 20 matches the official Ergo Haven
++      K:04 status language ("red blink at 20% or below, not charging");
++      the widget previously hard-coded 10 here.
++
+ config RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS
+     int "Interval between low battery red flashes in ms"
+     default 60000
 diff --git a/src/widget.c b/src/widget.c
-index f54c45d..b308cc4 100644
+index f54c45d..2ced1a9 100644
 --- a/src/widget.c
 +++ b/src/widget.c
-@@ -169,6 +169,7 @@ static uint8_t prev_layer = 255;
+@@ -19,8 +19,9 @@
+  *   - reconnecting to a known device: white flash (300 ms cycle)
+  *   - looking for the other half (peripheral): yellow blink (500 ms cycle)
+  *   - host / other half connected: green for 1 s
+- *   - battery <= 10% and no USB: red flash every 60 s (every 15 s
+- *     below 5%)
++ *   - battery at/below RGBLED_WIDGET_LOW_BATTERY_LEVEL (default 20)
++ *     and no USB: red flash every
++ *     RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS (faster below 5%)
+  *   - &ind_bat key: own charge 1 s (<=20% red, <=40% orange, <=74%
+  *     yellow, else green), then each peripheral's charge 1 s
+  *
+@@ -169,6 +170,7 @@ static uint8_t prev_layer = 255;
  static int64_t base_layer_since = 0;
  static int32_t last_left_push = -2;  /* force first push */
  static int32_t last_right_push = -2; /* force first push */
@@ -34,7 +69,7 @@ index f54c45d..b308cc4 100644
  #endif
  
  // persistent layer color pushed to every half (palette index, -1 = none)
-@@ -178,6 +179,21 @@ static bool layer_color_is_base = false;
+@@ -178,6 +180,21 @@ static bool layer_color_is_base = false;
  // key-toggled: whether the base-layer (white) display is allowed at all
  static bool base_light_enabled = true;
  
@@ -56,7 +91,7 @@ index f54c45d..b308cc4 100644
  void k04_status_led_show_color(int16_t param) {
      if (param == 0xFF) {
          layer_led_color = -1;
-@@ -205,9 +221,17 @@ static struct zmk_led_hsb hsb_dim(struct zmk_led_hsb c) {
+@@ -205,9 +222,17 @@ static struct zmk_led_hsb hsb_dim(struct zmk_led_hsb c) {
  }
  
  static void apply_hsb(struct zmk_led_hsb c) {
@@ -74,7 +109,7 @@ index f54c45d..b308cc4 100644
  }
  
  static void apply_black(void) {
-@@ -301,14 +325,26 @@ static int led_activity_listener_cb(const zmk_event_t *eh) {
+@@ -301,14 +326,26 @@ static int led_activity_listener_cb(const zmk_event_t *eh) {
      }
      switch (ev->state) {
      case ZMK_ACTIVITY_SLEEP:
@@ -106,7 +141,7 @@ index f54c45d..b308cc4 100644
          break;
      }
      return 0;
-@@ -374,9 +410,17 @@ static void status_poll(void) {
+@@ -374,9 +411,17 @@ static void status_poll(void) {
          last_left_push = left_target;
          k04_status_led_show_color(left_target < 0 ? (int16_t)0xFF : (int16_t)left_target);
      }
@@ -125,7 +160,23 @@ index f54c45d..b308cc4 100644
      }
  
      // host connection edge: computer (USB or BT profile) connected
-@@ -491,10 +535,18 @@ extern void led_status_thread(void *d0, void *d1, void *d2) {
+@@ -450,11 +495,13 @@ static void status_poll(void) {
+     }
+ #endif // IS_CENTRAL / peripheral
+ 
+-    // low battery: red flash while under 10%, more often under 5%
++    // low battery: red flash at/below the threshold (official K:04
++    // language: <= 20%, every 2 s; critical tier below 5% may blink
++    // faster via its own interval)
+     uint8_t level = 0;
+ #if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+     level = zmk_battery_state_of_charge();
+-    if (level > 0 && level <= 10 && !usb) {
++    if (level > 0 && level <= CONFIG_RGBLED_WIDGET_LOW_BATTERY_LEVEL && !usb) {
+         int64_t interval = level <= 5
+                                ? CONFIG_RGBLED_WIDGET_LOW_BATTERY_CRITICAL_INTERVAL_MS
+                                : CONFIG_RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS;
+@@ -491,10 +538,18 @@ extern void led_status_thread(void *d0, void *d1, void *d2) {
      ARG_UNUSED(d2);
  
      while (true) {
@@ -145,7 +196,7 @@ index f54c45d..b308cc4 100644
      }
  }
  
-@@ -503,6 +555,11 @@ K_THREAD_DEFINE(led_status_tid, 1024, led_status_thread, NULL, NULL, NULL,
+@@ -503,6 +558,11 @@ K_THREAD_DEFINE(led_status_tid, 1024, led_status_thread, NULL, NULL, NULL,
  
  static int led_widget_init(const struct device *dev) {
      ARG_UNUSED(dev);

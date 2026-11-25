@@ -1,4 +1,4 @@
-From 967ff10acdffa40867946b328d60b421a1cdf848 Mon Sep 17 00:00:00 2001
+From 478a726e51d64f57d6ec09ec6bf779c9e213ca9b Mon Sep 17 00:00:00 2001
 From: arazyan <arazdatas@gmail.com>
 Date: Wed, 25 Nov 2026 17:43:42 +0300
 Subject: [PATCH] input: iqs5xx: survive chip resets, park polling during ZMK
@@ -9,15 +9,16 @@ Subject: [PATCH] input: iqs5xx: survive chip resets, park polling during ZMK
   chip stays at factory defaults after any watchdog/EMI reset and the
   touchpad is dead until reboot ('worked 10 minutes then stopped'
   symptom).
-- ZMK activity listener: cancel poll_work on SLEEP/STANDBY, restart on
-  wake, gated on CONFIG_ZMK_SLEEP.
+- ZMK activity listener: cancel poll_work on SLEEP, restart on wake,
+  gated on CONFIG_ZMK_SLEEP. IDLE is deliberately not parked: the half
+  is still awake there and the touchpad must stay live.
 - Back the polling loop off to CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_BACKOFF_MS
   (default 1 s) while reads fail, e.g. with an empty module socket.
 ---
  drivers/input/Kconfig  |  9 ++++
- drivers/input/iqs5xx.c | 97 +++++++++++++++++++++++++++++++++++++++++-
+ drivers/input/iqs5xx.c | 99 +++++++++++++++++++++++++++++++++++++++++-
  drivers/input/iqs5xx.h | 10 +++++
- 3 files changed, 115 insertions(+), 1 deletion(-)
+ 3 files changed, 117 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/input/Kconfig b/drivers/input/Kconfig
 index 399dfb3..eb5aba3 100644
@@ -38,7 +39,7 @@ index 399dfb3..eb5aba3 100644
 +
  endif # INPUT_AZOTEQ_IQS5XX
 diff --git a/drivers/input/iqs5xx.c b/drivers/input/iqs5xx.c
-index 7d06ced..701b30c 100644
+index 7d06ced..db6d2f7 100644
 --- a/drivers/input/iqs5xx.c
 +++ b/drivers/input/iqs5xx.c
 @@ -14,10 +14,19 @@
@@ -106,7 +107,7 @@ index 7d06ced..701b30c 100644
          goto end_comm;
      }
  
-@@ -240,10 +274,66 @@ static void iqs5xx_poll_work_handler(struct k_work *work) {
+@@ -240,10 +274,68 @@ static void iqs5xx_poll_work_handler(struct k_work *work) {
      struct k_work_delayable *dwork = k_work_delayable_from_work(work);
      struct iqs5xx_data *data = CONTAINER_OF(dwork, struct iqs5xx_data, poll_work);
  
@@ -131,9 +132,11 @@ index 7d06ced..701b30c 100644
 + * The fast poll is the design cost of a touchpad the user is actively
 + * using — but ZMK parks the whole SoC when the half sleeps, and a
 + * 16 ms k_work loop drags it out of deep idle 60+ times a second,
-+ * forever. Park the loop on SLEEP/STANDBY, resume on wake, and re-apply
-+ * the chip configuration after a long park because the IQS5xx watchdog
-+ * will have reset the chip meanwhile.
++ * forever. Park the loop on SLEEP, resume on wake, and re-apply the
++ * chip configuration after a long park because the IQS5xx watchdog
++ * will have reset the chip meanwhile. (ZMK v0.3 activity states are
++ * only ACTIVE/IDLE/SLEEP — we deliberately do NOT park on IDLE: the
++ * half is still awake there and the touchpad must stay live.)
 + * ------------------------------------------------------------------------- */
 +#if IS_ENABLED(CONFIG_ZMK_SLEEP)
 +
@@ -147,7 +150,7 @@ index 7d06ced..701b30c 100644
 +
 +    struct iqs5xx_data *data = pm_poll_dev->data;
 +
-+    if (ev->state == ZMK_ACTIVITY_SLEEP || ev->state == ZMK_ACTIVITY_STANDBY) {
++    if (ev->state == ZMK_ACTIVITY_SLEEP) {
 +        if (!data->paused) {
 +            data->paused = true;
 +            data->paused_at = k_uptime_get();
@@ -174,7 +177,7 @@ index 7d06ced..701b30c 100644
  static int iqs5xx_setup_device(const struct device *dev) {
      const struct iqs5xx_config *config = dev->config;
      int ret;
-@@ -417,6 +507,11 @@ static int iqs5xx_init(const struct device *dev) {
+@@ -417,6 +509,11 @@ static int iqs5xx_init(const struct device *dev) {
      if (config->rdy_gpio.port == NULL) {
          LOG_INF("RDY GPIO not present, starting polling mode");
          k_work_schedule(&data->poll_work, K_MSEC(CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_INTERVAL_MS));

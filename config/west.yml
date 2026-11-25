@@ -23,7 +23,7 @@ manifest:
     # revision together, see patches/README.md.
     - name: zmk-driver-azoteq-iqs5xx
       remote: arazyan
-      revision: 967ff10acdffa40867946b328d60b421a1cdf848 # branch: k04-polling
+      revision: 478a726e51d64f57d6ec09ec6bf779c9e213ca9b # branch: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
     # Personal fork of fustopoke's v0.3-compat branch with patches/0001

@@ -33,6 +33,6 @@ manifest:
     # see patches/README.md.
     - name: zmk-smart-rgbled-widget
       remote: arazyan
-      revision: 91a33f8848eaeb2819d217a38d519fac84f752d4 # branch: k04-led-fixes
+      revision: a435896415473d04962ac3505a0bb34fe385a1d3 # branch: k04-led-fixes
   self:
     path: config

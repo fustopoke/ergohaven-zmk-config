@@ -53,7 +53,7 @@ disconnects, and the touchpad dying permanently after a few minutes.
 
 ## Current fork state (already wired into west.yml)
 
-- `arazyan/zmk-smart-rgbled-widget`, branch `k04-led-fixes` @ `91a33f8`
+- `arazyan/zmk-smart-rgbled-widget`, branch `k04-led-fixes` @ `a435896`
   (= `5fd554d` + `0001`) — pinned in `west.yml`.
 - `arazyan/zmk-driver-azoteq-iqs5xx`, branch `k04-polling` @ `478a726`
   (= upstream `2af5a3e` + `0002`) — pinned in `west.yml`.

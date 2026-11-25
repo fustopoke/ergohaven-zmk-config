@@ -9,8 +9,20 @@
  *
  * Onboard indicator: a single WS2812-class smart RGB LED, data line on
  * P0.30 (RMK drives it with PWM sequences; here the Zephyr WS2812 SPI
- * backend on SPIM3 feeds it, exposed as the ZMK underglow device for
+ * backend feeds it, exposed as the ZMK underglow device for
  * ergohaven/zmk-smart-rgbled-widget).
+ *
+ * WHY SPI1 AND NOT SPI3 (do not "simplify" this back):
+ * nRF52840 silicon anomaly 198 — while SPIM3 transfers with EasyDMA,
+ * any CPU RAM access in the same cycle corrupts the outgoing stream.
+ * The BLE link layer touches RAM constantly, so every WS2812 frame
+ * sent through SPIM3 is a dice roll: random colors, flicker, LEDs
+ * "working badly". Nordic's errata workaround (raised IRQ priority in
+ * nrfx_spim) cannot be built together with a SoftDevice/BLE stack, and
+ * Zephyr's ZMK fork carries no mitigation for SPIM3 at all. SPI1 is in
+ * the same full-speed domain, has no errata, and is unused on this
+ * board — Zephyr's own nRF52840 boards (e.g. actinius_icarus) put
+ * their neopixel on SPI1 for the same reason.
  */
 
 #include <dt-bindings/zmk/matrix_transform.h>
@@ -19,13 +31,15 @@
 #include "k04_mini_layout.dtsi"
 
 &pinctrl {
-    k04_spi3_default: k04_spi3_default {
+    /* MOSI only: WS2812 is single-wire, the SPIM clock never leaves
+     * the chip. P0.30 is the LED data line on both halves. */
+    k04_spi1_default: k04_spi1_default {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
         };
     };
 
-    k04_spi3_sleep: k04_spi3_sleep {
+    k04_spi1_sleep: k04_spi1_sleep {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
             low-power-enable;
@@ -33,12 +47,12 @@
     };
 };
 
-&spi3 {
+&spi1 {
     compatible = "nordic,nrf-spim";
     status = "okay";
 
-    pinctrl-0 = <&k04_spi3_default>;
-    pinctrl-1 = <&k04_spi3_sleep>;
+    pinctrl-0 = <&k04_spi1_default>;
+    pinctrl-1 = <&k04_spi1_sleep>;
     pinctrl-names = "default", "sleep";
 
     led_strip: ws2812@0 {

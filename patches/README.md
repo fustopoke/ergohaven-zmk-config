@@ -1,12 +1,14 @@
 # patches/ — fixes for the k04_mini external modules
 
-The two ZMK modules `config/west.yml` pulls for the K:04 Mini are forks
-under `fustopoke` (no push access from here). Each patch below is a
-ready `git am` diff against the exact commit pinned in `west.yml`.
-Together with the in-repo fixes (WS2812 moved to SPI2 — see
+The two ZMK modules `config/west.yml` pulls for the K:04 Mini originate
+under `fustopoke` (no push access there). Each patch below is a `git am`
+diff against the exact upstream commit they are based on. They are
+**already applied**: `config/west.yml` pins the patched forks under
+`arazyan/` (created with `gh repo fork`, patches applied with `git am`,
+pushed). Together with the in-repo fixes (WS2812 moved to SPI2 — see
 `boards/shields/k04_mini/k04_mini.dtsi` — sleep timeout, brightness)
-they address the two failures: status LED behaving erratically and
-halves disconnecting at random times.
+they address three failures: erratic status LED, random half
+disconnects, and the touchpad dying permanently after a few minutes.
 
 ## What each patch fixes
 
@@ -49,21 +51,26 @@ halves disconnecting at random times.
   chip's watchdog resets its registers meanwhile), and backs off to a
   1 s interval while reads fail. Gated on `CONFIG_ZMK_SLEEP`.
 
-## How to activate
+## Current fork state (already wired into west.yml)
 
-Run from anywhere with `gh` authenticated as an account that can fork:
+- `arazyan/zmk-smart-rgbled-widget`, branch `k04-led-fixes` @ `91a33f8`
+  (= `5fd554d` + `0001`) — pinned in `west.yml`.
+- `arazyan/zmk-driver-azoteq-iqs5xx`, branch `k04-polling` @ `967ff10`
+  (= upstream `2af5a3e` + `0002`) — pinned in `west.yml`.
+
+To reproduce from scratch or to recover a fork:
 
 ```sh
-# 1. Fork both repos under your GitHub account
+# 1. Fork both repos under your GitHub account (no-op if they exist)
 gh repo fork fustopoke/zmk-smart-rgbled-widget --clone=false
 gh repo fork fustopoke/zmk-driver-azoteq-iqs5xx  --clone=false
 
 # 2. Clone, apply, push
 git clone https://github.com/<you>/zmk-smart-rgbled-widget
 cd zmk-smart-rgbled-widget
-git checkout v0.3-compat
+git checkout -b k04-led-fixes 5fd554d
 git am /path/to/this/repo/patches/0001-widget-sleep-gating-frame-dedupe-spec-led-language.patch
-git push origin v0.3-compat
+git push -u origin k04-led-fixes
 cd ..
 
 git clone https://github.com/<you>/zmk-driver-azoteq-iqs5xx
@@ -76,15 +83,9 @@ git push origin k04-polling
 (`git am` will complain about author identity — use yours, e.g.
 `git config user.name/user.email` in each clone before applying.)
 
-3. Point `config/west.yml` at your forks: change `remote: fustopoke` to
-   a new remote entry for your account (or keep `fustopoke` as the
-   `url-base` only for what stays there), and replace the pinned
-   `revision:` with the new commit SHAs you just pushed.
-
-4. Verify with CI: push the config — the build must go green; flash and
-   watch the K:04 status language (it should now also *go dark* a few
-   minutes after you stop using the keyboard, and the right half's LED
-   should come back on its own after a split reconnect).
+After any fork change: update `revision:` in `config/west.yml` to the
+new SHA (branch name in the trailing comment), push the config, and CI
+must go green — that build is the compile check for the module code.
 
 ## If the patches conflict
 

@@ -2,39 +2,37 @@ manifest:
   remotes:
     - name: ergohaven
       url-base: https://github.com/ergohaven
-    # fustopoke is replaced with your GitHub login by the setup commands.
-    - name: fustopoke
-      url-base: https://github.com/fustopoke
+    - name: arazyan
+      url-base: https://github.com/arazyan
   projects:
-    # Revisions are pinned to exact commits, not branch names: the k04 LED
-    # fixes under patches/ are diffs against these SHAs, and an unpinning
-    # branch moved under them once already. To update: fetch the branch,
-    # rebase/redo the patches, move the SHA in the same commit.
+    # Revisions are pinned to exact commits, not branch names: the two
+    # k04 forks below carry patches/ diffs applied on top of fustopoke
+    # bases, and an unpinning branch moved under them once already. To
+    # update: rebase the matching patch onto the new upstream commit in
+    # the fork and move the SHA in the same commit.
     - name: ergohaven-zmk
       remote: ergohaven
       revision: ebba0c8d7f2112a40413b84ff9774195ade05130 # branch: main
       import: config/west.yml
     # Azoteq IQS5xx touchpad driver — fork carrying the polling-mode patch
     # for the K:04 module socket (RDY line is not routed to the MCU).
-    # Required by the k04_mini builds. The upstream pinned revision polls
-    # through ZMK sleep and never reconfigures the chip after a self-reset
-    # (the "touchpad died permanently" bug); patches/0002 (reset self-heal,
-    # sleep-gated polling, I2C failure backoff) is meant to land in a fork
-    # — then bump this revision, see patches/README.md.
+    # Required by the k04_mini builds. Personal fork of fustopoke's
+    # k04-polling branch with patches/0002 applied via `git am`
+    # (SHOW_RESET self-heal, sleep-gated polling, I2C failure backoff);
+    # base 2af5a3e. Rebase the patch onto upstream and bump this
+    # revision together, see patches/README.md.
     - name: zmk-driver-azoteq-iqs5xx
-      remote: fustopoke
-      revision: 2af5a3eb23151181350202693fe7d35886789292 # branch: k04-polling
+      remote: arazyan
+      revision: 967ff10acdffa40867946b328d60b421a1cdf848 # branch: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
-    # Fork branch carrying the ZMK v0.3 compatibility patch. The upstream
-    # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
-    # The upstream pinned revision polls and refreshes the strip around
-    # the clock and warns about low battery only at <= 10%; patches/0001
-    # (frame dedupe, sleep gating, right-half color re-push, official
-    # 20% low-battery threshold) is meant to land in a fork — then bump
-    # this revision, see patches/README.md.
+    # Personal fork of fustopoke's v0.3-compat branch with patches/0001
+    # applied via `git am` (frame dedupe, sleep gating, right-half color
+    # re-push, official 20% low-battery threshold); base 5fd554d.
+    # Rebase the patch onto upstream and bump this revision together,
+    # see patches/README.md.
     - name: zmk-smart-rgbled-widget
-      remote: fustopoke
-      revision: 5fd554d9d33bbdfaebfb95c922d40ba84ac307da # branch: v0.3-compat
+      remote: arazyan
+      revision: 91a33f8848eaeb2819d217a38d519fac84f752d4 # branch: k04-led-fixes
   self:
     path: config

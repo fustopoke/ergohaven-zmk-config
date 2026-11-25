@@ -34,11 +34,12 @@ README.md for the full picture.
   TWI1 are the same physical peripheral, and the touchpad owns TWIM1 on
   the right half — Zephyr build-asserts on that. SPI2 shares its base
   with TWI2/UART2, both unused.) `config/west.yml` pins the three external
-  modules to exact SHAs (branch name in a trailing comment); the module-side
-  LED/touchpad power fixes live in `patches/` as `git am` patches against
-  those SHAs (fustopoke repos are not pushable from here) — bumping a
-  revision means revalidating/rebasing the matching patch in the same commit.
-  Treat `config/k04_mini.keymap` as the friend's frozen design unless asked
+  modules to exact SHAs (branch name in a trailing comment); the two
+  fustopoke k04 modules are pinned through `arazyan` forks that carry
+  `patches/0001`/`0002` applied via `git am` (fustopoke repos are not
+  pushable) — bumping a revision means rebasing the matching patch in the
+  fork and moving the SHA in the same commit. Treat
+  `config/k04_mini.keymap` as the friend's frozen design unless asked
   to change it.
 - `config/keys_ru.h` is generated data (Unicode license header) — do not
   reformat or hand-edit definitions; add nothing.

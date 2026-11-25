@@ -1,0 +1,162 @@
+From 86f728dd44ef3654a21b5456ff700e07f41a47dd Mon Sep 17 00:00:00 2001
+From: arazyan <arazdatas@gmail.com>
+Date: Wed, 25 Nov 2026 17:02:07 +0300
+Subject: [PATCH] widget: stop the LED poll from defeating sleep
+
+Three fixes for the battery drain and the dark right-half LED after a
+split dropout:
+
+- apply_hsb() dedupes identical frames (re-applied every 2 s so a
+  corrupted write self-heals). The persistent-display path used to call
+  select_effect+set_hsb+on() every 30 ms with the same color; on()
+  restarts the underglow refresh timer each time.
+- The poll thread blocks on a semaphore (no timeout) while the half is
+  asleep, and on SLEEP the widget now calls zmk_rgb_underglow_off() so
+  the underglow 50 ms strip-refresh timer stops too. A 30 ms k_msleep
+  forever was waking both halves 33x/s and prevented deep idle.
+- The central re-pushes the right-half color every ~5 s even when it
+  did not change: the peripheral clears its color on link loss and
+  ZMK v0.3 gives the central no reconnect event, so the right LED
+  stayed dark after a dropout until the next layer change.
+---
+ src/widget.c | 71 ++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 64 insertions(+), 7 deletions(-)
+
+diff --git a/src/widget.c b/src/widget.c
+index f54c45d..b308cc4 100644
+--- a/src/widget.c
++++ b/src/widget.c
+@@ -169,6 +169,7 @@ static uint8_t prev_layer = 255;
+ static int64_t base_layer_since = 0;
+ static int32_t last_left_push = -2;  /* force first push */
+ static int32_t last_right_push = -2; /* force first push */
++static int64_t last_right_push_at;   /* for the periodic re-push below */
+ #endif
+ 
+ // persistent layer color pushed to every half (palette index, -1 = none)
+@@ -178,6 +179,21 @@ static bool layer_color_is_base = false;
+ // key-toggled: whether the base-layer (white) display is allowed at all
+ static bool base_light_enabled = true;
+ 
++/* Frame dedupe for apply_hsb(). The persistent-display path calls
++ * apply_hsb() every ~30 ms with the *same* color while the strip is lit,
++ * and every call ends in zmk_rgb_underglow_on(), which restarts the
++ * underglow refresh timer — the halves never go quiet while an LED is
++ * on. Skip identical frames, but re-apply every couple of seconds so a
++ * missed or corrupted frame self-heals. */
++static struct zmk_led_hsb last_hsb;
++static bool last_hsb_valid = false;
++static int64_t last_hsb_at;
++
++/* Wakes the poll thread when the activity state changes; the thread
++ * blocks on this (no timeout) while the half is asleep so that the LED
++ * state machine is not the reason the SoC never sleeps. */
++static K_SEM_DEFINE(status_sem, 0, 1);
++
+ void k04_status_led_show_color(int16_t param) {
+     if (param == 0xFF) {
+         layer_led_color = -1;
+@@ -205,9 +221,17 @@ static struct zmk_led_hsb hsb_dim(struct zmk_led_hsb c) {
+ }
+ 
+ static void apply_hsb(struct zmk_led_hsb c) {
++    int64_t now = k_uptime_get();
++    if (last_hsb_valid && last_hsb.h == c.h && last_hsb.s == c.s &&
++        last_hsb.b == c.b && now - last_hsb_at < 2000) {
++        return;
++    }
+     zmk_rgb_underglow_select_effect(UNDERGLOW_EFFECT_SOLID_COMPAT);
+     zmk_rgb_underglow_set_hsb(c);
+     zmk_rgb_underglow_on();
++    last_hsb = c;
++    last_hsb_valid = true;
++    last_hsb_at = now;
+ }
+ 
+ static void apply_black(void) {
+@@ -301,14 +325,26 @@ static int led_activity_listener_cb(const zmk_event_t *eh) {
+     }
+     switch (ev->state) {
+     case ZMK_ACTIVITY_SLEEP:
+-        asleep = true;
+-        // LED off in sleep unless the half is powered from USB
+-        if (!USB_POWERED) {
+-            apply_black();
++        if (!asleep) {
++            asleep = true;
++            last_hsb_valid = false;
++            // LED off in sleep unless the half is powered from USB —
++            // and OFF properly: applying black alone leaves the
++            // underglow refresh timer running, which would wake this
++            // half ~20x/s for the entire sleep. zmk_rgb_underglow_off()
++            // writes the black frame and stops the timer.
++            if (!USB_POWERED) {
++                zmk_rgb_underglow_off();
++            }
++            k_sem_give(&status_sem);
+         }
+         break;
+     default:
+-        asleep = false;
++        if (asleep) {
++            asleep = false;
++            last_hsb_valid = false; /* force a fresh frame on wake */
++        }
++        k_sem_give(&status_sem);
+         break;
+     }
+     return 0;
+@@ -374,9 +410,17 @@ static void status_poll(void) {
+         last_left_push = left_target;
+         k04_status_led_show_color(left_target < 0 ? (int16_t)0xFF : (int16_t)left_target);
+     }
+-    if (right_target != last_right_push) {
++    /* Re-push unconditionally every ~5 s, not only on color change: the
++     * split peripheral clears its received color when its link drops,
++     * and v0.3 offers the central no "peripheral reconnected" event —
++     * without the refresh the right LED stays dark after a dropout
++     * until the next layer switch. The peripheral-side dedupe makes
++     * redundant pushes free. */
++    if (right_target != last_right_push ||
++        (right_target >= 0 && now - last_right_push_at > 5000)) {
+         push_right(right_target < 0 ? 0xFF : (uint32_t)right_target, 0);
+         last_right_push = right_target;
++        last_right_push_at = now;
+     }
+ 
+     // host connection edge: computer (USB or BT profile) connected
+@@ -491,10 +535,18 @@ extern void led_status_thread(void *d0, void *d1, void *d2) {
+     ARG_UNUSED(d2);
+ 
+     while (true) {
++        if (asleep) {
++            /* No timeout while the half sleeps: a 30 ms k_msleep here
++             * would defeat ZMK sleep on both halves (a SoC woken 33
++             * times a second never settles into deep idle). The activity
++             * listener gives the semaphore when we wake. */
++            k_sem_take(&status_sem, K_FOREVER);
++            continue;
++        }
+         if (initialized) {
+             status_poll();
+         }
+-        k_msleep(STATUS_POLL_MS);
++        k_sem_take(&status_sem, K_MSEC(STATUS_POLL_MS));
+     }
+ }
+ 
+@@ -503,6 +555,11 @@ K_THREAD_DEFINE(led_status_tid, 1024, led_status_thread, NULL, NULL, NULL,
+ 
+ static int led_widget_init(const struct device *dev) {
+     ARG_UNUSED(dev);
++    /* The widget owns the strip: drop any underglow state restored from
++     * settings (an ON effect would run its 50 ms refresh timer forever)
++     * and make sure the first frame after init is written. */
++    zmk_rgb_underglow_off();
++    last_hsb_valid = false;
+     initialized = true;
+     LOG_INF("K:04 status LED widget initialized");
+     return 0;
+-- 
+2.56.1
+

@@ -6,20 +6,32 @@ manifest:
     - name: fustopoke
       url-base: https://github.com/fustopoke
   projects:
+    # Revisions are pinned to exact commits, not branch names: the k04 LED
+    # fixes under patches/ are diffs against these SHAs, and an unpinning
+    # branch moved under them once already. To update: fetch the branch,
+    # rebase/redo the patches, move the SHA in the same commit.
     - name: ergohaven-zmk
       remote: ergohaven
-      revision: main
+      revision: ebba0c8d7f2112a40413b84ff9774195ade05130 # branch: main
       import: config/west.yml
     # Azoteq IQS5xx touchpad driver — fork carrying the polling-mode patch
     # for the K:04 module socket (RDY line is not routed to the MCU).
+    # Required by the k04_mini builds. The upstream pinned revision polls
+    # through ZMK sleep; patches/0002 (sleep-gated polling + I2C failure
+    # backoff) is meant to land in a fork — then bump this revision, see
+    # patches/README.md.
     - name: zmk-driver-azoteq-iqs5xx
       remote: fustopoke
-      revision: k04-polling
+      revision: 2af5a3eb23151181350202693fe7d35886789292 # branch: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
-    # Fork branch carrying the ZMK v0.3 compatibility patch.
+    # Fork branch carrying the ZMK v0.3 compatibility patch. The upstream
+    # pinned revision polls and refreshes the strip around the clock;
+    # patches/0001 (frame dedupe, sleep gating, right-half color re-push)
+    # is meant to land in a fork — then bump this revision, see
+    # patches/README.md.
     - name: zmk-smart-rgbled-widget
       remote: fustopoke
-      revision: v0.3-compat
+      revision: 5fd554d9d33bbdfaebfb95c922d40ba84ac307da # branch: v0.3-compat
   self:
     path: config

@@ -28,9 +28,12 @@ README.md for the full picture.
   touching k04 files, re-read `CROSS_OS.md` first; upstream `ergohaven-zmk`
   has no k04_mini shield, so `boards/` here is the only source.
 - **K:04 hardware invariants** (see the diagnosis section in `CROSS_OS.md`):
-  the onboard WS2812 must stay on **SPI1, never SPI3** — nRF52840 anomaly 198
+  the onboard WS2812 must stay on **SPI2, never SPI3** — nRF52840 anomaly 198
   corrupts SPIM3 EasyDMA TX while the BLE stack runs, and no workaround
-  exists for SoftDevice builds. `config/west.yml` pins the three external
+  exists for SoftDevice builds. (SPI1 is not an option either: SPI1 and
+  TWI1 are the same physical peripheral, and the touchpad owns TWIM1 on
+  the right half — Zephyr build-asserts on that. SPI2 shares its base
+  with TWI2/UART2, both unused.) `config/west.yml` pins the three external
   modules to exact SHAs (branch name in a trailing comment); the module-side
   LED/touchpad power fixes live in `patches/` as `git am` patches against
   those SHAs (fustopoke repos are not pushable from here) — bumping a

@@ -199,9 +199,11 @@ times. Two independent root causes, both fixed here:
    touching RAM. Nordic's errata workaround cannot be built with a
    SoftDevice, and the Zephyr ZMK fork carries no mitigation. The strip
    data line (P0.30) is unchanged, but the SPI instance moved to
-   `&spi1` in `k04_mini.dtsi` (no errata, unused on this board — the same
-   choice Zephyr's nRF52840 boards make for neopixels). *Do not move it
-   back to spi3.*
+   `&spi2` in `k04_mini.dtsi`: no errata there, and instance 2 (SPI2/
+   TWI2/UART2) is entirely unused. SPI1 was not an option — on nRF52,
+   SPI1 *is* TWI1 (one physical peripheral), which the right half's
+   touchpad owns as TWIM1; Zephyr build-asserts on the collision.
+   *Do not move the strip back to spi3, and never onto spi1.*
 2. **The halves never slept, so the battery sagged and the radio
    browned out.** Three loops ran continuously on each half: the LED
    widget's 30 ms poll re-writing the strip through the underglow

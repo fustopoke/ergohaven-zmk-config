@@ -3,7 +3,7 @@
 The two ZMK modules `config/west.yml` pulls for the K:04 Mini are forks
 under `fustopoke` (no push access from here). Each patch below is a
 ready `git am` diff against the exact commit pinned in `west.yml`.
-Together with the in-repo fixes (WS2812 moved to SPI1 — see
+Together with the in-repo fixes (WS2812 moved to SPI2 — see
 `boards/shields/k04_mini/k04_mini.dtsi` — sleep timeout, brightness)
 they address the two failures: status LED behaving erratically and
 halves disconnecting at random times.

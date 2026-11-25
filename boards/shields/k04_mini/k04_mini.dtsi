@@ -12,17 +12,20 @@
  * backend feeds it, exposed as the ZMK underglow device for
  * ergohaven/zmk-smart-rgbled-widget).
  *
- * WHY SPI1 AND NOT SPI3 (do not "simplify" this back):
+ * WHY SPI2 AND NOT SPI3 (do not "simplify" this back):
  * nRF52840 silicon anomaly 198 — while SPIM3 transfers with EasyDMA,
  * any CPU RAM access in the same cycle corrupts the outgoing stream.
  * The BLE link layer touches RAM constantly, so every WS2812 frame
  * sent through SPIM3 is a dice roll: random colors, flicker, LEDs
  * "working badly". Nordic's errata workaround (raised IRQ priority in
  * nrfx_spim) cannot be built together with a SoftDevice/BLE stack, and
- * Zephyr's ZMK fork carries no mitigation for SPIM3 at all. SPI1 is in
- * the same full-speed domain, has no errata, and is unused on this
- * board — Zephyr's own nRF52840 boards (e.g. actinius_icarus) put
- * their neopixel on SPI1 for the same reason.
+ * Zephyr's ZMK fork carries no mitigation for SPIM3 at all.
+ *
+ * And it cannot be SPI1 either: on the nRF52 family SPI1 and TWI1 are
+ * the SAME physical peripheral (Zephyr build-asserts on that) — the
+ * right half's touchpad owns TWIM1. SPI0 is likewise shared with the
+ * board's UART0 console pins. SPI2 is fast-domain, errata-free and
+ * entirely unused on this board.
  */
 
 #include <dt-bindings/zmk/matrix_transform.h>
@@ -33,13 +36,13 @@
 &pinctrl {
     /* MOSI only: WS2812 is single-wire, the SPIM clock never leaves
      * the chip. P0.30 is the LED data line on both halves. */
-    k04_spi1_default: k04_spi1_default {
+    k04_spi2_default: k04_spi2_default {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
         };
     };
 
-    k04_spi1_sleep: k04_spi1_sleep {
+    k04_spi2_sleep: k04_spi2_sleep {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
             low-power-enable;
@@ -47,12 +50,12 @@
     };
 };
 
-&spi1 {
+&spi2 {
     compatible = "nordic,nrf-spim";
     status = "okay";
 
-    pinctrl-0 = <&k04_spi1_default>;
-    pinctrl-1 = <&k04_spi1_sleep>;
+    pinctrl-0 = <&k04_spi2_default>;
+    pinctrl-1 = <&k04_spi2_sleep>;
     pinctrl-names = "default", "sleep";
 
     led_strip: ws2812@0 {

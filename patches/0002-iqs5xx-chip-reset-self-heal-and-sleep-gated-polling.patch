@@ -1,4 +1,4 @@
-From 478a726e51d64f57d6ec09ec6bf779c9e213ca9b Mon Sep 17 00:00:00 2001
+From de6cb7a1652bda3bc33228fc5a2d3f21da79d5bc Mon Sep 17 00:00:00 2001
 From: arazyan <arazdatas@gmail.com>
 Date: Wed, 25 Nov 2026 17:43:42 +0300
 Subject: [PATCH] input: iqs5xx: survive chip resets, park polling during ZMK
@@ -13,12 +13,15 @@ Subject: [PATCH] input: iqs5xx: survive chip resets, park polling during ZMK
   gated on CONFIG_ZMK_SLEEP. IDLE is deliberately not parked: the half
   is still awake there and the touchpad must stay live.
 - Back the polling loop off to CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_BACKOFF_MS
-  (default 1 s) while reads fail, e.g. with an empty module socket.
+  (default 1 s) only after the chip has ignored a burst of polls; the
+  first few failures stay at the fast interval and the counter resets
+  on wake, so the touchpad answers the first touch after sleep instead
+  of waiting for the backoff to expire.
 ---
- drivers/input/Kconfig  |  9 ++++
- drivers/input/iqs5xx.c | 99 +++++++++++++++++++++++++++++++++++++++++-
- drivers/input/iqs5xx.h | 10 +++++
- 3 files changed, 117 insertions(+), 1 deletion(-)
+ drivers/input/Kconfig  |   9 ++++
+ drivers/input/iqs5xx.c | 112 ++++++++++++++++++++++++++++++++++++++++-
+ drivers/input/iqs5xx.h |  15 ++++++
+ 3 files changed, 135 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/input/Kconfig b/drivers/input/Kconfig
 index 399dfb3..eb5aba3 100644
@@ -39,7 +42,7 @@ index 399dfb3..eb5aba3 100644
 +
  endif # INPUT_AZOTEQ_IQS5XX
 diff --git a/drivers/input/iqs5xx.c b/drivers/input/iqs5xx.c
-index 7d06ced..db6d2f7 100644
+index 7d06ced..defbb91 100644
 --- a/drivers/input/iqs5xx.c
 +++ b/drivers/input/iqs5xx.c
 @@ -14,10 +14,19 @@
@@ -62,7 +65,7 @@ index 7d06ced..db6d2f7 100644
  static int iqs5xx_read_reg16(const struct device *dev, uint16_t reg, uint16_t *val) {
      const struct iqs5xx_config *config = dev->config;
      uint8_t buf[2];
-@@ -85,12 +94,27 @@ static void iqs5xx_work_handler(struct k_work *work) {
+@@ -85,12 +94,34 @@ static void iqs5xx_work_handler(struct k_work *work) {
      uint8_t sys_info_0, sys_info_1, gesture_events_0, gesture_events_1, num_fingers;
      int ret;
  
@@ -74,6 +77,9 @@ index 7d06ced..db6d2f7 100644
 +        ret = iqs5xx_setup_device(dev);
 +        if (ret < 0) {
 +            data->read_failing = true; /* keep backing off, retry next tick */
++            if (data->fail_count < UINT8_MAX) {
++                data->fail_count++;
++            }
 +            return;
 +        }
 +        data->needs_reinit = false;
@@ -84,13 +90,17 @@ index 7d06ced..db6d2f7 100644
      if (ret < 0) {
          LOG_ERR("Failed to read system info 0: %d", ret);
 +        data->read_failing = true;
++        if (data->fail_count < UINT8_MAX) {
++            data->fail_count++;
++        }
          goto end_comm;
      }
 +    data->read_failing = false;
++    data->fail_count = 0;
  
      ret = iqs5xx_read_reg8(dev, IQS5XX_SYSTEM_INFO_1, &sys_info_1);
      if (ret < 0) {
-@@ -115,6 +139,16 @@ static void iqs5xx_work_handler(struct k_work *work) {
+@@ -115,6 +146,16 @@ static void iqs5xx_work_handler(struct k_work *work) {
          LOG_INF("Device reset detected");
          // Acknowledge reset.
          iqs5xx_write_reg8(dev, IQS5XX_SYSTEM_CONTROL_0, IQS5XX_ACK_RESET);
@@ -107,7 +117,7 @@ index 7d06ced..db6d2f7 100644
          goto end_comm;
      }
  
-@@ -240,10 +274,68 @@ static void iqs5xx_poll_work_handler(struct k_work *work) {
+@@ -240,10 +281,74 @@ static void iqs5xx_poll_work_handler(struct k_work *work) {
      struct k_work_delayable *dwork = k_work_delayable_from_work(work);
      struct iqs5xx_data *data = CONTAINER_OF(dwork, struct iqs5xx_data, poll_work);
  
@@ -118,12 +128,15 @@ index 7d06ced..db6d2f7 100644
 +
      k_work_submit(&data->work);
 -    k_work_reschedule(&data->poll_work, K_MSEC(CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_INTERVAL_MS));
-+    /* Back the loop off to a slow cadence while the chip does not
-+     * answer at all (empty module socket, dead bus): a full-speed poll
-+     * of a non-responding device is pure power and log spam. */
-+    k_work_reschedule(&data->poll_work, K_MSEC(data->read_failing
-+                                                   ? CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_BACKOFF_MS
-+                                                   : CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_INTERVAL_MS));
++    /* Back the loop off to a slow cadence only once the chip has
++     * ignored a burst of polls (empty module socket, dead bus), but
++     * keep polling fast for the first few failures: right after ZMK
++     * wake the touchpad either needs a power-up or a re-init, and a
++     * 1 s backoff there is the "first touch takes ages" symptom. */
++    k_work_reschedule(&data->poll_work,
++                      K_MSEC(data->read_failing && data->fail_count > 5
++                                 ? CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_BACKOFF_MS
++                                 : CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_INTERVAL_MS));
  }
  
 +/* -------------------------------------------------------------------------
@@ -164,6 +177,9 @@ index 7d06ced..db6d2f7 100644
 +        /* The chip watchdog has likely fired during the park: the next
 +         * work cycle replays iqs5xx_setup_device() before reading. */
 +        data->needs_reinit = (k_uptime_get() - data->paused_at) > 5000;
++        /* Retry at full speed first — the backoff is for a dead bus,
++         * not for a chip that is merely waking up. */
++        data->fail_count = 0;
 +        k_work_schedule(&data->poll_work, K_NO_WAIT);
 +    }
 +    return 0;
@@ -177,7 +193,7 @@ index 7d06ced..db6d2f7 100644
  static int iqs5xx_setup_device(const struct device *dev) {
      const struct iqs5xx_config *config = dev->config;
      int ret;
-@@ -417,6 +509,11 @@ static int iqs5xx_init(const struct device *dev) {
+@@ -417,6 +522,11 @@ static int iqs5xx_init(const struct device *dev) {
      if (config->rdy_gpio.port == NULL) {
          LOG_INF("RDY GPIO not present, starting polling mode");
          k_work_schedule(&data->poll_work, K_MSEC(CONFIG_INPUT_AZOTEQ_IQS5XX_POLL_INTERVAL_MS));
@@ -190,10 +206,10 @@ index 7d06ced..db6d2f7 100644
  
      return 0;
 diff --git a/drivers/input/iqs5xx.h b/drivers/input/iqs5xx.h
-index 5246105..e4c6b57 100644
+index 5246105..68e7c6e 100644
 --- a/drivers/input/iqs5xx.h
 +++ b/drivers/input/iqs5xx.h
-@@ -148,6 +148,16 @@ struct iqs5xx_data {
+@@ -148,6 +148,21 @@ struct iqs5xx_data {
      // Flag to indicate if the button was pressed in a previous cycle.
      uint8_t buttons_pressed;
      bool active_hold;
@@ -201,6 +217,11 @@ index 5246105..e4c6b57 100644
 +    // no module in the socket: every access NACKs). Used to back the
 +    // polling loop off to the slow interval instead of hammering the bus.
 +    bool read_failing;
++    // Consecutive failed cycles. The poll stays at the fast interval for
++    // the first few retries (a chip that just woke up NACKs for a few
++    // milliseconds while its own power-up completes) and only then backs
++    // off to the slow interval.
++    uint8_t fail_count;
 +    // Polling loop is parked because ZMK reports the half as asleep.
 +    bool paused;
 +    int64_t paused_at;

@@ -23,7 +23,7 @@ manifest:
     # revision together, see patches/README.md.
     - name: zmk-driver-azoteq-iqs5xx
       remote: arazyan
-      revision: 478a726e51d64f57d6ec09ec6bf779c9e213ca9b # branch: k04-polling
+      revision: de6cb7a1652bda3bc33228fc5a2d3f21da79d5bc # branch: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
     # Personal fork of fustopoke's v0.3-compat branch with patches/0001
@@ -33,6 +33,6 @@ manifest:
     # see patches/README.md.
     - name: zmk-smart-rgbled-widget
       remote: arazyan
-      revision: a435896415473d04962ac3505a0bb34fe385a1d3 # branch: k04-led-fixes
+      revision: 0eab399311a866ecc4366121527411136bd1ba4b # branch: k04-led-fixes
   self:
     path: config

@@ -1,0 +1,337 @@
+From 0eab399311a866ecc4366121527411136bd1ba4b Mon Sep 17 00:00:00 2001
+From: arazyan <arazdatas@gmail.com>
+Date: Wed, 25 Nov 2026 17:43:42 +0300
+Subject: [PATCH] widget: own the strip, keep EXT_POWER on
+
+The LED went dark on every build that moved the WS2812 to SPIM2, so the
+strip is back on SPIM3 (the only instance the board leaves free) and
+the rF52840 anomaly-198 exposure is cut in software instead:
+
+- The widget no longer drives the strip through zmk_rgb_underglow_*.
+  That path keeps ZMK's 50 ms refresh ticking, i.e. twenty SPIM3 DMA
+  transfers a second through a peripheral that corrupts its TX whenever
+  the BLE stack touches RAM concurrently. Frames now go straight to the
+  LED-strip API, one per colour change, with a 10 s self-healing
+  re-push. WS2812 frames are static, so a missed frame is invisible
+  until the next colour change.
+- ZMK's underglow is switched off once at init (it would otherwise run
+  its own effect at boot) and never re-enabled.
+- EXT_POWER is enabled at init and never disabled. On the K:04 that
+  rail feeds the touchpad module: cutting it on ZMK sleep is what made
+  the first touch after wake take ages (the IQS5xx had to power up and
+  be reconfigured), and cutting it here made the strip dark for good.
+
+Kept: sleep-gated polling (thread parks on SLEEP, one black frame),
+periodic right-half colour re-push on the central, 20% low-battery
+threshold.
+---
+ Kconfig      |   9 +++
+ src/widget.c | 177 +++++++++++++++++++++++++++++++++++++++++++++------
+ 2 files changed, 166 insertions(+), 20 deletions(-)
+
+diff --git a/Kconfig b/Kconfig
+index 8208064..93e8dc2 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -306,6 +306,15 @@ config RGBLED_WIDGET_PERSISTENT_BRIGHTNESS
+     range 0 100
+     default 30
+ 
++config RGBLED_WIDGET_LOW_BATTERY_LEVEL
++    int "Battery level percentage at/below which the red warning blink runs"
++    range 1 100
++    default 20
++    help
++      Red warning blink threshold. 20 matches the official Ergo Haven
++      K:04 status language ("red blink at 20% or below, not charging");
++      the widget previously hard-coded 10 here.
++
+ config RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS
+     int "Interval between low battery red flashes in ms"
+     default 60000
+diff --git a/src/widget.c b/src/widget.c
+index f54c45d..cb97645 100644
+--- a/src/widget.c
++++ b/src/widget.c
+@@ -19,8 +19,9 @@
+  *   - reconnecting to a known device: white flash (300 ms cycle)
+  *   - looking for the other half (peripheral): yellow blink (500 ms cycle)
+  *   - host / other half connected: green for 1 s
+- *   - battery <= 10% and no USB: red flash every 60 s (every 15 s
+- *     below 5%)
++ *   - battery at/below RGBLED_WIDGET_LOW_BATTERY_LEVEL (default 20)
++ *     and no USB: red flash every
++ *     RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS (faster below 5%)
+  *   - &ind_bat key: own charge 1 s (<=20% red, <=40% orange, <=74%
+  *     yellow, else green), then each peripheral's charge 1 s
+  *
+@@ -29,9 +30,11 @@
+ 
+ #include <zephyr/device.h>
+ #include <zephyr/devicetree.h>
++#include <zephyr/drivers/led_strip.h>
+ #include <zephyr/init.h>
+ #include <zephyr/kernel.h>
+ 
++#include <drivers/ext_power.h>
+ #include <zmk/activity.h>
+ #include <zmk/battery.h>
+ #include <zmk/ble.h>
+@@ -63,15 +66,30 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+ #error "A zmk,underglow chosen node must be declared"
+ #endif
+ 
+-/* ZMK v0.3 compatibility: the underglow effect enum lives privately in
+- * app/src/rgb_underglow.c — SOLID is its first member. */
+-#define UNDERGLOW_EFFECT_SOLID_COMPAT 0
+-
+ /* ZMK v0.3 compatibility: USB_POWERED only exists in newer
+  * ZMK; v0.3 exposes zmk_usb_get_conn_state(). "USB power present" is
+  * the charging condition (POWERED or HID). */
+ #define USB_POWERED (zmk_usb_get_conn_state() != ZMK_USB_CONN_NONE)
+ 
++/* The widget owns the strip: frames are pushed straight through the
++ * Zephyr LED-strip API instead of zmk_rgb_underglow_*, whose 50 ms tick
++ * would keep rewriting the strip at 20 Hz. On nRF52840 that matters:
++ * the K:04 strip has to live on SPIM3 (the only SPI instance left free
++ * is shared with peripherals the touchpad needs), and anomaly 198 makes
++ * every SPIM3 DMA transfer a dice roll while the BLE stack touches RAM.
++ * One frame per color change instead of twenty per second turns a
++ * visibly glitching LED into an occasional flicker. */
++static const struct device *const strip = DEVICE_DT_GET(DT_CHOSEN(zmk_underglow));
++
++#if IS_ENABLED(CONFIG_ZMK_EXT_POWER)
++/* Powers the module socket (the touchpad) — and on some revisions the
++ * LED. Enabled once at init and never disabled: cutting it in sleep is
++ * what made the first touch after wake take seconds (the IQS5xx chip
++ * had to power up and be reconfigured from scratch). */
++static const struct device *const ext_power_dev =
++    DEVICE_DT_GET(DT_INST(0, zmk_ext_power_generic));
++#endif
++
+ #define IS_CENTRAL (!IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL))
+ 
+ #if IS_CENTRAL
+@@ -169,6 +187,7 @@ static uint8_t prev_layer = 255;
+ static int64_t base_layer_since = 0;
+ static int32_t last_left_push = -2;  /* force first push */
+ static int32_t last_right_push = -2; /* force first push */
++static int64_t last_right_push_at;   /* for the periodic re-push below */
+ #endif
+ 
+ // persistent layer color pushed to every half (palette index, -1 = none)
+@@ -178,6 +197,11 @@ static bool layer_color_is_base = false;
+ // key-toggled: whether the base-layer (white) display is allowed at all
+ static bool base_light_enabled = true;
+ 
++/* Wakes the poll thread when the activity state changes; the thread
++ * blocks on this (no timeout) while the half is asleep so that the LED
++ * state machine is not the reason the SoC never sleeps. */
++static K_SEM_DEFINE(status_sem, 0, 1);
++
+ void k04_status_led_show_color(int16_t param) {
+     if (param == 0xFF) {
+         layer_led_color = -1;
+@@ -204,16 +228,77 @@ static struct zmk_led_hsb hsb_dim(struct zmk_led_hsb c) {
+     return c;
+ }
+ 
+-static void apply_hsb(struct zmk_led_hsb c) {
+-    zmk_rgb_underglow_select_effect(UNDERGLOW_EFFECT_SOLID_COMPAT);
+-    zmk_rgb_underglow_set_hsb(c);
+-    zmk_rgb_underglow_on();
++static void hsb_to_rgb(struct zmk_led_hsb c, struct led_rgb *px) {
++    int32_t h = c.h % 360;
++    int32_t s = c.s;
++    int32_t v = c.b;
++    int32_t region = h / 60;
++    int32_t rem = h % 60;
++    int32_t p = (v * (100 - s)) / 100;
++    int32_t q = (v * (100 - (s * rem) / 60)) / 100;
++    int32_t t = (v * (100 - (s * (60 - rem)) / 60)) / 100;
++    int32_t r, g, b;
++
++    switch (region) {
++    case 0:
++        r = v; g = t; b = p;
++        break;
++    case 1:
++        r = q; g = v; b = p;
++        break;
++    case 2:
++        r = p; g = v; b = t;
++        break;
++    case 3:
++        r = p; g = q; b = v;
++        break;
++    case 4:
++        r = t; g = p; b = v;
++        break;
++    default:
++        r = v; g = p; b = q;
++        break;
++    }
++
++    px->r = (uint8_t)(r * 255 / 100);
++    px->g = (uint8_t)(g * 255 / 100);
++    px->b = (uint8_t)(b * 255 / 100);
++}
++
++static void strip_write(struct zmk_led_hsb c) {
++    if (!device_is_ready(strip)) {
++        return;
++    }
++    struct led_rgb px;
++    hsb_to_rgb(c, &px);
++    led_strip_update_rgb(strip, &px, 1);
++}
++
++/* Frame dedupe: write only when the color really changes, plus a slow
++ * re-push so a corrupted SPIM3 frame (anomaly 198) or a lost write
++ * heals by itself. */
++static struct zmk_led_hsb last_hsb;
++static bool last_hsb_valid = false;
++static int64_t last_hsb_at;
++
++static void apply_hsb_inner(struct zmk_led_hsb c, bool force) {
++    int64_t now = k_uptime_get();
++    if (!force && last_hsb_valid && last_hsb.h == c.h && last_hsb.s == c.s &&
++        last_hsb.b == c.b && now - last_hsb_at < 10000) {
++        return;
++    }
++    strip_write(c);
++    last_hsb = c;
++    last_hsb_valid = true;
++    last_hsb_at = now;
+ }
+ 
++static void apply_hsb(struct zmk_led_hsb c) { apply_hsb_inner(c, false); }
++
+ static void apply_black(void) {
+     /* WS2812-class LEDs latch their last frame; an explicit black write
+      * is the deterministic way to go dark. */
+-    apply_hsb(color_def[0]);
++    apply_hsb_inner(color_def[0], true);
+ }
+ 
+ static void override_for(struct zmk_led_hsb c, uint16_t ms) {
+@@ -301,14 +386,23 @@ static int led_activity_listener_cb(const zmk_event_t *eh) {
+     }
+     switch (ev->state) {
+     case ZMK_ACTIVITY_SLEEP:
+-        asleep = true;
+-        // LED off in sleep unless the half is powered from USB
+-        if (!USB_POWERED) {
+-            apply_black();
++        if (!asleep) {
++            asleep = true;
++            // LED off in sleep unless the half is powered from USB.
++            // One black frame, then no writes at all — the strip needs
++            // no refresh timer, and EXT_POWER stays ON so the touchpad
++            // module is already awake on the first touch.
++            if (!USB_POWERED) {
++                apply_black();
++            }
++            k_sem_give(&status_sem);
+         }
+         break;
+     default:
+-        asleep = false;
++        if (asleep) {
++            asleep = false;
++        }
++        k_sem_give(&status_sem);
+         break;
+     }
+     return 0;
+@@ -374,9 +468,17 @@ static void status_poll(void) {
+         last_left_push = left_target;
+         k04_status_led_show_color(left_target < 0 ? (int16_t)0xFF : (int16_t)left_target);
+     }
+-    if (right_target != last_right_push) {
++    /* Re-push unconditionally every ~5 s, not only on color change: the
++     * split peripheral clears its received color when its link drops,
++     * and v0.3 offers the central no "peripheral reconnected" event —
++     * without the refresh the right LED stays dark after a dropout
++     * until the next layer switch. The peripheral-side colour apply
++     * makes redundant pushes harmless. */
++    if (right_target != last_right_push ||
++        (right_target >= 0 && now - last_right_push_at > 5000)) {
+         push_right(right_target < 0 ? 0xFF : (uint32_t)right_target, 0);
+         last_right_push = right_target;
++        last_right_push_at = now;
+     }
+ 
+     // host connection edge: computer (USB or BT profile) connected
+@@ -450,11 +552,13 @@ static void status_poll(void) {
+     }
+ #endif // IS_CENTRAL / peripheral
+ 
+-    // low battery: red flash while under 10%, more often under 5%
++    // low battery: red flash at/below the threshold (official K:04
++    // language: <= 20%, every 2 s; critical tier below 5% may blink
++    // faster via its own interval)
+     uint8_t level = 0;
+ #if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+     level = zmk_battery_state_of_charge();
+-    if (level > 0 && level <= 10 && !usb) {
++    if (level > 0 && level <= CONFIG_RGBLED_WIDGET_LOW_BATTERY_LEVEL && !usb) {
+         int64_t interval = level <= 5
+                                ? CONFIG_RGBLED_WIDGET_LOW_BATTERY_CRITICAL_INTERVAL_MS
+                                : CONFIG_RGBLED_WIDGET_LOW_BATTERY_BLINK_INTERVAL_MS;
+@@ -490,11 +594,32 @@ extern void led_status_thread(void *d0, void *d1, void *d2) {
+     ARG_UNUSED(d1);
+     ARG_UNUSED(d2);
+ 
++    /* ZMK restores the underglow state from settings during boot, and
++     * that restore may well run after led_widget_init() (same SYS_INIT
++     * priority): a saved "on" state would start ZMK's 50 ms refresh
++     * timer, which repaints the strip from its own colour twenty times
++     * a second and fights this widget. Re-assert "off" once the boot has
++     * settled, and restore the module rail that off() just cut. */
++    k_msleep(1000);
++    zmk_rgb_underglow_off();
++#if IS_ENABLED(CONFIG_ZMK_EXT_POWER)
++    ext_power_enable(ext_power_dev);
++#endif
++    last_hsb_valid = false;
++
+     while (true) {
++        if (asleep) {
++            /* No timeout while the half sleeps: a 30 ms k_msleep here
++             * would defeat ZMK sleep on both halves (a SoC woken 33
++             * times a second never settles into deep idle). The activity
++             * listener gives the semaphore when we wake. */
++            k_sem_take(&status_sem, K_FOREVER);
++            continue;
++        }
+         if (initialized) {
+             status_poll();
+         }
+-        k_msleep(STATUS_POLL_MS);
++        k_sem_take(&status_sem, K_MSEC(STATUS_POLL_MS));
+     }
+ }
+ 
+@@ -503,6 +628,18 @@ K_THREAD_DEFINE(led_status_tid, 1024, led_status_thread, NULL, NULL, NULL,
+ 
+ static int led_widget_init(const struct device *dev) {
+     ARG_UNUSED(dev);
++    /* Shut ZMK's own underglow off for good: its 50 ms tick would push
++     * the strip through SPIM3 twenty times a second (anomaly 198) and
++     * its settings persistence would fight this widget. The base-layer
++     * color is written by the poll thread a moment later. */
++    zmk_rgb_underglow_off();
++#if IS_ENABLED(CONFIG_ZMK_EXT_POWER)
++    /* Turn the module rail back on right away — the underglow_off()
++     * above just cut it, and on the K:04 that rail feeds the touchpad. */
++    int rc = ext_power_enable(ext_power_dev);
++    LOG_INF("EXT_POWER enable: %d", rc);
++#endif
++    last_hsb_valid = false;
+     initialized = true;
+     LOG_INF("K:04 status LED widget initialized");
+     return 0;
+-- 
+2.56.1
+

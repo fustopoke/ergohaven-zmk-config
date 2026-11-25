@@ -193,31 +193,50 @@ Symptoms: the onboard WS2812 indicators behaved erratically (wrong colors,
 flicker), and either half could silently fall off the BLE link at random
 times. Two independent root causes, both fixed here:
 
-1. **WS2812 on SPIM3 was a dice roll.** nRF52840 silicon anomaly 198:
-   while SPIM3 transfers via EasyDMA, any CPU RAM access in the same cycle
-   corrupts the outgoing bitstream — and the BLE link layer is constantly
-   touching RAM. Nordic's errata workaround cannot be built with a
-   SoftDevice, and the Zephyr ZMK fork carries no mitigation. The strip
-   data line (P0.30) is unchanged, but the SPI instance moved to
-   `&spi2` in `k04_mini.dtsi`: no errata there, and instance 2 (SPI2/
-   TWI2/UART2) is entirely unused. SPI1 was not an option — on nRF52,
-   SPI1 *is* TWI1 (one physical peripheral), which the right half's
-   touchpad owns as TWIM1; Zephyr build-asserts on the collision.
-   *Do not move the strip back to spi3, and never onto spi1.*
+1. **The strip has to live on SPIM3, and that is where anomaly 198 is.**
+   nRF52840 silicon anomaly 198: while SPIM3 transfers via EasyDMA, any
+   CPU RAM access in the same cycle corrupts the outgoing bitstream — and
+   the BLE link layer is constantly touching RAM. There is nowhere else to
+   move it: SPI0 and SPI1 are the same physical peripherals as the board's
+   console UART and as TWIM1 (owned by the right half's touchpad — Zephyr
+   build-asserts on that), and SPI2, although documented as free and
+   errata-free, **never drove the strip on this hardware** — every build
+   that put the WS2812 on `&spi2` came out with a dark LED. So the strip
+   stays on `&spi3` (data line P0.30, unchanged) and the mitigation is in
+   software: `zmk-smart-rgbled-widget` writes frames straight through the
+   Zephyr LED-strip API, one per colour change (plus a 10 s self-healing
+   re-push), and ZMK's own underglow — which refreshes the strip every
+   50 ms, i.e. 20 SPIM3 DMA transfers a second — is switched off at init
+   and never re-enabled (`CONFIG_ZMK_RGB_UNDERGLOW_ON_START=n`). One DMA
+   lottery ticket per colour change instead of twenty per second. *Do not
+   restore the periodic refresh, and do not try spi2 again.*
 2. **The halves never slept, so the battery sagged and the radio
    browned out.** Three loops ran continuously on each half: the LED
-   widget's 30 ms poll re-writing the strip through the underglow
-   subsystem (which itself refreshes at 50 ms while on), the IQS5xx
-   touchpad polled every 16 ms through ZMK sleep, and the always-lit
-   white base LED at brightness 60. Fix = `patches/0001` + `patches/0002`
-   (sleep-gating + write dedupe + dead-chip backoff — fork-and-apply, see
+   widget's 30 ms poll re-writing the strip, the IQS5xx touchpad polled
+   every 16 ms through ZMK sleep, and the always-lit white base LED at
+   brightness 60. Fix = `patches/0001` + `patches/0002` (event-driven
+   sleep-gated polling + dead-chip backoff — fork-and-apply, see
    `patches/README.md`), `CONFIG_ZMK_IDLE_SLEEP_TIMEOUT` 10 min → 3 min,
    `CONFIG_RGBLED_WIDGET_PERSISTENT_BRIGHTNESS` 60 → 40. A side effect of
    the fixes: after a split reconnect the right-half LED now re-lights on
    its own within ~5 s (the central re-pushes its color; the peripheral
    clears it on link loss).
+3. **The touchpad died until reboot, then woke slowly.** Two separate
+   faults in the IQS5xx driver. (a) When the chip self-resets (watchdog or
+   EMI), `SHOW_RESET` was ACKed but `iqs5xx_setup_device()` was never
+   re-run, so the chip sat at factory defaults and the touchpad was dead
+   until the half was rebooted — the "works for 5–10 minutes, then stops"
+   symptom. Fixed in `patches/0002`: replay the full configuration on
+   reset and after a long parked poll. (b) Slow first touch after wake:
+   ZMK's underglow `off()` used to call `ext_power_disable()`, and
+   `EXT_POWER` (gpio1 9) is the **module rail** that powers the touchpad;
+   every sleep power-cycled the IQS5xx, so the first touch had to wait for
+   its power-up. Fixed in `patches/0001`: the widget enables `EXT_POWER`
+   at init and never disables it. The driver also stopped backing off to
+   its 1 s interval on the first failed poll — the backoff now only kicks
+   in after a burst of failures and resets on wake.
 
-Flash order after pulling this: `settings_reset` on **both** halves, then
+Flash order after pulling this: no `settings_reset` is needed — just
 left, then right. Host re-pairing is *not* required (the HID descriptor
 did not change), but if a host still misbehaves, un-pair/re-pair it.
 

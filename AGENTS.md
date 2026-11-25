@@ -28,12 +28,22 @@ README.md for the full picture.
   touching k04 files, re-read `CROSS_OS.md` first; upstream `ergohaven-zmk`
   has no k04_mini shield, so `boards/` here is the only source.
 - **K:04 hardware invariants** (see the diagnosis section in `CROSS_OS.md`):
-  the onboard WS2812 must stay on **SPI2, never SPI3** — nRF52840 anomaly 198
-  corrupts SPIM3 EasyDMA TX while the BLE stack runs, and no workaround
-  exists for SoftDevice builds. (SPI1 is not an option either: SPI1 and
-  TWI1 are the same physical peripheral, and the touchpad owns TWIM1 on
-  the right half — Zephyr build-asserts on that. SPI2 shares its base
-  with TWI2/UART2, both unused.) `config/west.yml` pins the three external
+  the onboard WS2812 is on **SPI3**, and that is the only instance the
+  board leaves free — SPI0/SPI1 share their physical peripherals with the
+  console UART and with TWIM1 (which the right half's touchpad owns;
+  Zephyr build-asserts on the collision), and SPI2 does not drive the
+  strip at all on this hardware (every SPI2 build came out with a dark
+  LED). nRF52840 anomaly 198 (SPIM3 EasyDMA TX corrupted by concurrent CPU
+  RAM access, i.e. by the BLE stack) is therefore mitigated **in the
+  widget**, not in the devicetree: `zmk-smart-rgbled-widget` writes one
+  frame per colour change straight through the Zephyr LED-strip API and
+  ZMK's 20 Hz underglow refresh (`CONFIG_ZMK_RGB_UNDERGLOW_ON_START=n`,
+  `zmk_rgb_underglow_off()` at init) is never used. Do not restore the
+  periodic refresh, and do not "simplify" the widget back onto
+  `zmk_rgb_underglow_*`. Also invariant: `EXT_POWER` (gpio1 9) feeds the
+  touchpad module rail and must stay **enabled** — the widget enables it at
+  init and never disables it; cutting it in sleep is what made the first
+  touch after wake take seconds. `config/west.yml` pins the three external
   modules to exact SHAs (branch name in a trailing comment); the two
   fustopoke k04 modules are pinned through `arazyan` forks that carry
   `patches/0001`/`0002` applied via `git am` (fustopoke repos are not

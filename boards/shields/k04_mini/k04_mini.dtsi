@@ -12,20 +12,23 @@
  * backend feeds it, exposed as the ZMK underglow device for
  * ergohaven/zmk-smart-rgbled-widget).
  *
- * WHY SPI2 AND NOT SPI3 (do not "simplify" this back):
+ * WHY SPI3 (and not SPI0/1/2):
  * nRF52840 silicon anomaly 198 — while SPIM3 transfers with EasyDMA,
  * any CPU RAM access in the same cycle corrupts the outgoing stream.
- * The BLE link layer touches RAM constantly, so every WS2812 frame
- * sent through SPIM3 is a dice roll: random colors, flicker, LEDs
- * "working badly". Nordic's errata workaround (raised IRQ priority in
- * nrfx_spim) cannot be built together with a SoftDevice/BLE stack, and
- * Zephyr's ZMK fork carries no mitigation for SPIM3 at all.
+ * The BLE link layer touches RAM constantly, so a busy use of SPIM3 is
+ * a dice roll. There is nowhere else to go, though: on the nRF52
+ * family SPI0/1 are the SAME physical peripherals as TWI0/UART0 and
+ * TWI1 (the board keeps a console UART and the right half's touchpad
+ * owns TWIM1 — Zephyr build-asserts on those collisions), and SPI2,
+ * while documented as free, did not drive the strip here (the LED
+ * stayed dark on every build that tried it).
  *
- * And it cannot be SPI1 either: on the nRF52 family SPI1 and TWI1 are
- * the SAME physical peripheral (Zephyr build-asserts on that) — the
- * right half's touchpad owns TWIM1. SPI0 is likewise shared with the
- * board's UART0 console pins. SPI2 is fast-domain, errata-free and
- * entirely unused on this board.
+ * The mitigation is therefore in the driver, not the devicetree:
+ * ergohaven/zmk-smart-rgbled-widget no longer runs ZMK's 20 Hz
+ * underglow refresh — it writes one frame per colour change straight
+ * through the LED-strip API. One lottery ticket per colour change
+ * instead of twenty per second, with a 10 s self-healing re-push.
+ * Do not "helpfully" restore the periodic refresh.
  */
 
 #include <dt-bindings/zmk/matrix_transform.h>
@@ -36,13 +39,13 @@
 &pinctrl {
     /* MOSI only: WS2812 is single-wire, the SPIM clock never leaves
      * the chip. P0.30 is the LED data line on both halves. */
-    k04_spi2_default: k04_spi2_default {
+    k04_spi3_default: k04_spi3_default {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
         };
     };
 
-    k04_spi2_sleep: k04_spi2_sleep {
+    k04_spi3_sleep: k04_spi3_sleep {
         group1 {
             psels = <NRF_PSEL(SPIM_MOSI, 0, 30)>;
             low-power-enable;
@@ -50,12 +53,12 @@
     };
 };
 
-&spi2 {
+&spi3 {
     compatible = "nordic,nrf-spim";
     status = "okay";
 
-    pinctrl-0 = <&k04_spi2_default>;
-    pinctrl-1 = <&k04_spi2_sleep>;
+    pinctrl-0 = <&k04_spi3_default>;
+    pinctrl-1 = <&k04_spi3_sleep>;
     pinctrl-names = "default", "sleep";
 
     led_strip: ws2812@0 {

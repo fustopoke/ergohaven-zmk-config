@@ -63,9 +63,11 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
    keymap header comment documents why the switch keys are per-layer
    bindings rather than a blind toggle.
 2. The RU layout remaps letters, so host shortcuts must use digits or
-   layout-independent keys; the `&en` macro's waits (150 ms) exist because
-   the host applies input-source switches asynchronously — do not trim
-   them.
+   layout-independent keys; the host applies input-source switches
+   asynchronously, hence the 150 ms settle waits (`&sym_en_hold`,
+   `&en` legacy). When symbols are needed from the ru base, go through
+   `&sym_en_hold` — one EN context per hold, never per-symbol toggling:
+   overlapping `&en` macros break the layout parity.
 
 ## Conventions
 

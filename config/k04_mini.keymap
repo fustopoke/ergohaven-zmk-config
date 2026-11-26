@@ -11,8 +11,11 @@
  *   1 ru      — base, Russian (OS layout: Russian; letters ride the OS
  *               translit automatically, symbol keys use RU_* aliases)
  *   2 nav     — navigation/numbers, shared between languages
- *   3 sym_en  — symbols, entered from the en layer
- *   4 sym_ru  — symbols, entered from the ru layer
+ *   3 sym_en  — symbols, entered from the en layer (plain &kp; needs the
+ *               OS to be English — the ru layer's &sym_en_hold provides
+ *               that context for its own hold too)
+ *   4 sym_ru  — LEGACY per-symbol &en scheme, no longer bound (kept as a
+ *               slot so layer indices don't shift)
  *   5 adj     — adjust (BT profiles, media, outputs, language keys)
  *   6 pointing — extra mouse buttons under the fingers while held
  *
@@ -41,9 +44,11 @@
  *     drift apart, press SYNC on the Adjust layer.
  *
  * Symbols that don't exist in the Russian layout (like { } & $ ~ @ ^) are
- * typed through the parameterized `&en` macro: it switches the OS to
- * English, taps the symbol, and switches back — including correct hold
- * handling. The host applies the switch asynchronously, hence the waits.
+ * typed from the en symbol layer: on the ru base, the right MO thumb key
+ * (&sym_en_hold) switches the OS to English ONCE for the whole hold,
+ * momentaries the plain sym_en layer, and switches back on release. The
+ * old per-symbol &en approach misfired when several symbols were typed
+ * in a row (odd number of host switches -> layout left in English).
  *
  * Note: caps_word on the nav layer works for English; ZMK's Caps Word
  * can't capitalize Russian Б (it lives on the DOT key) — an RuEn-specific
@@ -210,6 +215,37 @@
             tap-ms = <30>;
         };
 
+        /* The right MO thumb key while the ru base layer is active.
+         *
+         * The old design routed every host-dependent symbol on sym_ru
+         * through &en: each press cycled the OS layout to English and
+         * back with 150ms waits. Two presses in a row (or one press
+         * while the previous macro's return-switch was still settling)
+         * broke the parity and the OS stayed in the wrong layout —
+         * "holding T7 and typing makes the language switch".
+         *
+         * Now the hold itself owns the switch: entering the hold cycles
+         * the OS to English ONCE, momentaries the plain EN symbol layer
+         * (3), and leaving the hold cycles back after a settle wait.
+         * Every hold is exactly two host switches no matter what and
+         * how much you type inside it, so parity cannot drift. The RU
+         * letters that sym_ru used to place around the &en symbols are
+         * reachable from the ru base layer itself. */
+        sym_en_hold: sym_en_hold {
+            compatible = "zmk,behavior-macro";
+            label = "SYM_EN_HOLD";
+            #binding-cells = <0>;
+            bindings =
+                <&os_lang_tog>,
+                <&macro_press &mo 3>,
+                <&macro_pause_for_release>,
+                <&macro_release &mo 3>,
+                <&macro_wait_time 150>,
+                <&os_lang_tog>;
+            wait-ms = <0>;
+            tap-ms = <30>;
+        };
+
         /* Parameterized: type an English-only symbol from the ru layer —
          * switch OS to English, handle press/hold, switch back. */
 
@@ -259,7 +295,7 @@
 &gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &layer_en
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
 &kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &kp FSLH                  &kp RSHFT
-&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &mo 4                      &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
+&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &sym_en_hold               &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
             >;
         };
 
@@ -287,6 +323,10 @@
 
         sym_ru {
             display-name = "Symbols (Ru)";
+            /* LEGACY: not bound anymore — the ru layer's MO thumb key is
+             * &sym_en_hold now (EN context + layer 3), see the macro's
+             * comment. Kept as layer index 4 so every other layer number,
+             * the LED palette indices and CROSS_OS.md stay stable. */
             bindings = <
 &trans  &en AT    &en LT        &kp EQUAL     &en GT    &en GRAVE                    &en CARET  &kp RU_DQT  &kp UNDER    &en SQT   &trans    &trans
 &trans  &kp RU_BSLH  &kp LPAR   &kp MINUS     &kp RPAR  &kp PLUS                     &kp PRCNT  &en LBRC    &kp RU_SEMI  &en RBRC  &kp EXCL  &trans

@@ -132,11 +132,14 @@ This is what upstream `k03_ruen.keymap` does.
   was changed by mouse, a system menu, or a second keyboard: the LED tells you
   what the keyboard thinks (`white` = English base, `blue` = Russian layer),
   SYNC makes the host match it.
-* Symbols that do not exist in the Russian layout (`{ } [ ] @ # $ ^ & ~`) are
-  typed by the `&en` macro, which cycles the host to English, taps the key and
-  cycles back. It waits 150 ms after each switch because the host applies it
-  asynchronously. If a slow host still races it, raise both
-  `&macro_wait_time 150` values.
+* Symbols that do not exist in the Russian layout (`{ } [ ] @ # $ ^ & ~`)
+  come from the en symbol layer: while the ru base layer is active, the
+  right MO thumb key is `&sym_en_hold` — it cycles the host to English
+  ONCE when the hold starts, momentaries layer 3, and cycles back ~150 ms
+  after release. Two switches per hold regardless of what you type inside,
+  so the parity can never drift. (The old per-symbol `&en` scheme on
+  sym_ru did drift — pressing several symbols in a row left the host in
+  English; the layer stays defined only to keep the layer indices stable.)
 
 ## Touchpad
 

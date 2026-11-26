@@ -32,10 +32,40 @@ language change. That does not work:
 * An extra shortcut that *is* accepted flips the layout an odd number of
   times, which permanently desynchronises the two states.
 
-There is no shortcut that is safe on all three hosts, so the config now
-declares one shortcut in one place instead of firing several.
+There is no shortcut that is safe on all three hosts, so the config declares
+the shortcuts it uses in one place instead of firing several.
 
-## Switch 1 — the host shortcut (one line)
+## Primary mechanism — absolute anchors (2026-11 redesign)
+
+Every normal language action now sets a **definite target**: "select layout
+1 (English)" / "select layout 2 (Russian)" via `&os_sel_en` / `&os_sel_ru`
+in `config/k04_mini.keymap`, sending `Meta+Ctrl+1` / `Meta+Ctrl+2` — the
+same anchors the OP36 RuEn keymap uses. The relative "next source"
+shortcut survives only in the Adjust layer's SYNC/LANG.
+
+Why: a relative toggle loses parity the moment the host coalesces rapid
+key chords (repeated symbol-layer entries, A12 immediately followed by
+T7 — the "and now the language keeps switching" symptom). Absolute
+commands are idempotent; a lost or doubled intermediate cannot matter,
+the last command always states the truth.
+
+One-time host setup:
+
+* **KDE Plasma** (the user's primary host): System Settings → Shortcuts →
+  *Keyboard Layout* → assign **Meta+Ctrl+1** to "Select Keyboard Layout"
+  slot 1 and **Meta+Ctrl+2** to slot 2. The tray's layout list must be
+  English first, Russian second.
+* **macOS**: System Settings → Keyboard → Keyboard Shortcuts → Input →
+  "Select the Input Source 1/2" → Ctrl+Shift+1/2; change the `os_sel_*`
+  bindings to `LS(LC(N1))` / `LS(LC(N2))` (this is what upstream
+  `k03_ruen.keymap` does).
+* **Windows**: no built-in select-layout-N chord — either add one via
+  PowerToys Keyboard Manager, or stay on the relative scheme below for
+  that machine.
+* **GNOME**: also has no absolute selection; on GNOME the relative
+  "Switch 1" below remains the mechanism (and its two-sources-only rule).
+
+## Switch 1 — the relative shortcut (SYNC/LANG fallback, one line)
 
 `config/k04_mini.keymap`, in the `macros` block:
 
@@ -64,10 +94,14 @@ Pick one, rebuild, flash **both** halves.
 
 ## Switch 2 — the spacebar chord (one line)
 
-Holding the OS key and tapping space switches layout *and* layer together
-(`&lg_space`, a mod-morph). The modifier it watches has to be **exactly** the
-one Switch 1 sends, because the morph adds its own copy of that modifier on
-top of the key you are holding:
+Holding the OS key and tapping space switches layout *and* layer together.
+Since the 2026-11 redesign there are two per-base mod-morphs —
+`&lg_space_en` on the en base (its morph target is `&layer_ru`) and
+`&lg_space_ru` on the ru base (target `&layer_en`) — so even the chord
+sets a definite target instead of blind-toggling. The modifier they watch
+has to be **exactly** the one the anchor shortcut carries (Super for the
+KDE `Meta+Ctrl+1/2` anchors; the morph adds its own copy of that modifier
+on top of the key you are holding):
 
 ```c
 mods = <(MOD_LGUI)>;   /* Linux / Windows — Super */
@@ -81,11 +115,13 @@ language key "does nothing" after you change presets.
 
 ## Host-side requirements
 
-* **Two input sources only: English + Russian.** The shortcut means "next
-  source"; with two sources "next" and "previous" are the same cycle, which is
-  what makes a single shortcut deterministic. A third source (a third layout,
-  an emoji picker, an IBus engine) breaks the cycle — remove it or use the
-  macOS absolute variant below.
+* **Two input sources only: English + Russian** (for the relative
+  Switch-1/LANG/SYNC fallbacks). The shortcut means "next source"; with two
+  sources "next" and "previous" are the same cycle, which is what makes a
+  single shortcut deterministic. A third source (a third layout, an emoji
+  picker, an IBus engine) breaks the cycle — remove it, or rely on the
+  absolute anchors above: they are immune to extra sources as long as
+  slots 1 and 2 of the host's list are English and Russian.
 * **Use the standard "Russian" layout (JCUKEN), not a phonetic one.**
   `config/keys_ru.h` maps the Cyrillic keys by the positions of the stock
   Russian layout; a phonetic or "Russian (typing)" variant will produce the
@@ -102,44 +138,33 @@ language key "does nothing" after you change presets.
 
 ### Optional, macOS only: absolute selection
 
-macOS is the one host that can *set* a specific layout instead of cycling,
-which removes the drift case entirely. Assign these two shortcuts in the
-macOS input-source shortcut panel (the number is the layout's position in the
-menu bar list — English first, Russian second, as in Ergo Haven's own RuEn
-keymaps):
-
-```
-Select input source 1 (English)   Ctrl+Shift+1
-Select input source 2 (Russian)   Ctrl+Shift+2
-```
-
-then use them in the macros that want a definite target:
-
-```c
-layer_en: bindings = <&to 0 &kp LS(LC(N1))>;
-layer_ru: bindings = <&to 1 &kp LS(LC(N2))>;
-```
-
-and inside the `en` symbol macro in place of its two `&os_lang_tog` steps.
-This is what upstream `k03_ruen.keymap` does.
+Superseded: absolute anchors are now the primary mechanism for every host
+that supports them — see "Primary mechanism — absolute anchors" above.
+On macOS that means Ctrl+Shift+1/2 and `LS(LC(N1))/LS(LC(N2))` inside the
+`os_sel_*` macros; the layout list order (English first) is the anchor.
 
 ## Keeping the two states paired
 
-* **A12** (top-right, both base layers) — switch language. The binding comes
-  from the layer that is currently active, so it is always "switch once".
-* **Adjust → LANG** — same switch, reachable from any layer.
-* **Adjust → SYNC** — flips *only* the OS input source. Use it when the layout
-  was changed by mouse, a system menu, or a second keyboard: the LED tells you
-  what the keyboard thinks (`white` = English base, `blue` = Russian layer),
-  SYNC makes the host match it.
+* **A12** (top-right, both base layers) — `&layer_en` / `&layer_ru`: one
+  action, two absolute sets — keyboard layer via `&to`, host layout via the
+  anchor shortcut. Nothing to drift.
+* **Adjust → LANG** (`&lg_tog`) — layer-blind fallback: `&tog 1` + one
+  relative host flip; reach for it only when you don't know which base is
+  active.
+* **Adjust → SYNC** (`&os_lang_tog`) — flips *only* the OS input source
+  (relative). Use it when a mouse/system menu/second keyboard changed the
+  host layout behind the keyboard's back. The per-layer LED colors are
+  off (uniform white), so drift is spotted by typing one letter: it comes
+  out `й` instead of `q` or vice versa.
 * Symbols that do not exist in the Russian layout (`{ } [ ] @ # $ ^ & ~`)
-  come from the en symbol layer: while the ru base layer is active, the
-  right MO thumb key is `&sym_en_hold` — it cycles the host to English
-  ONCE when the hold starts, momentaries layer 3, and cycles back ~150 ms
-  after release. Two switches per hold regardless of what you type inside,
-  so the parity can never drift. (The old per-symbol `&en` scheme on
-  sym_ru did drift — pressing several symbols in a row left the host in
-  English; the layer stays defined only to keep the layer indices stable.)
+  live on the EN symbol layout. From the ru base, the right MO thumb key
+  enters a **session**: `&sym_enter` SETs the host to English (anchor) and
+  switches to layer 4, which repeats the plain EN symbol layout; the same
+  thumb position on layer 4 is `&sym_exit`, SETting the host back to
+  Russian and returning to ru. Sticky + absolute means repeated fast taps
+  cannot break parity — every press states a definite target. (The old
+  schemes — per-symbol `&en` toggles, then a per-hold toggle pair — both
+  raced on bursts; that was the "T7 keeps switching the language" bug.)
 
 ## Pairing the second / third Bluetooth profile
 

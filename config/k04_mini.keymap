@@ -11,44 +11,48 @@
  *   1 ru      — base, Russian (OS layout: Russian; letters ride the OS
  *               translit automatically, symbol keys use RU_* aliases)
  *   2 nav     — navigation/numbers, shared between languages
- *   3 sym_en  — symbols, entered from the en layer (plain &kp; needs the
- *               OS to be English — the ru layer's &sym_en_hold provides
- *               that context for its own hold too)
- *   4 sym_ru  — LEGACY per-symbol &en scheme, no longer bound (kept as a
- *               slot so layer indices don't shift)
+ *   3 sym_en  — symbols, entered (momentary) from the en layer — the OS is
+ *               already English there, so plain &kp scancodes
+ *   4 sym_ru  — SYMBOL SESSION, entered from the ru layer via T7
+ *               (&sym_enter): the host is *set* to layout 1 (English) for
+ *               the whole session and this layer carries the same plain
+ *               symbol layout as sym_en; the T7 position on it is
+ *               &sym_exit, which *sets* the host back to layout 2
+ *               (Russian) and returns to the ru base
  *   5 adj     — adjust (BT profiles, media, outputs, language keys)
  *   6 pointing — extra mouse buttons under the fingers while held
  *
- * Language switching (one keymap, every OS):
+ * Language switching — ABSOLUTE anchors (one keymap, every OS):
  *   - The keyboard layer is the source of truth; every action that changes
  *     it also changes the OS input source, and nothing else does.
- *   - &os_lang_tog asks the host to move to the NEXT input source. With
- *     exactly two sources (English, Russian) "next" and "previous" are the
- *     same cycle, so a single shortcut is enough and it stays in sync.
- *   - A12 (top-right) on each base layer goes to the other language: on the
- *     en layer it is &layer_ru, on the ru layer &layer_en. Because the
- *     binding is taken from the layer that is currently active, the action
- *     is always "switch once", never "blind toggle" — that is what keeps
- *     firmware and OS in step.
- *   - Ctrl/Cmd+Space on the spacebar (&lg_space mod-morph) flips OS and
- *     keyboard layer together.
- *   - Adjust layer: LANG (&lg_tog) switches both, SYNC (&os_lang_tog) flips
- *     ONLY the OS input source — press it if you changed the layout with the
- *     mouse, another keyboard or a system menu and the two drifted apart,
- *     MOUSE (&mo 6) reaches the pointing layer, and the outermost right
- *     thumb key (&k04_layer_led 0 2) toggles the always-lit white base light.
- *   - The status LED used to show the active language (white base /
- *     blue ru layer); the per-layer colors were switched off by user
- *     request — the LED now shows only the official battery/BT/connect
- *     language. Layer↔OS sync is still the invariant above; if the two
- *     drift apart, press SYNC on the Adjust layer.
+ *   - Host switches are absolute — "select layout 1 = English",
+ *     "select layout 2 = Russian" — not a relative "next source". KDE
+ *     ships these actions (System Settings → Shortcuts → Keyboard Layout →
+ *     "Select Keyboard Layout"), bind them to Meta+Ctrl+1 / Meta+Ctrl+2
+ *     (same anchors as the OP36 RuEn keymap). macOS: Ctrl+Shift+1/2 via
+ *     LS(LC(N1))/LS(LC(N2)). Absolute commands are idempotent, so host
+ *     key-event coalescing/debounce can no longer desync anything: the
+ *     LAST command always states the truth.
+ *   - A12 (top-right) on each base layer: &layer_ru / &layer_en set BOTH
+ *     the layer (&to) and the host (&os_sel_*).
+ *   - Spacebar with Super held: per-base mod-morphs — &lg_space_en on the
+ *     en base (= &layer_ru), &lg_space_ru on the ru base (= &layer_en).
+ *   - Adjust layer: LANG (&lg_tog) still cycles "next source + tog layer"
+ *     as a layer-blind fallback; SYNC (&os_lang_tog) flips ONLY the OS
+ *     input source (relative escape hatch after an external change);
+ *     MOUSE (&mo 6) reaches the pointing layer; the outermost right thumb
+ *     key (&k04_layer_led 0 2) toggles the always-lit white base light.
+ *   - The status LED shows only the official battery/BT/connect language
+ *     (per-layer colors were switched off by user request). If layer and
+ *     OS ever drift apart (a foreign keyboard changed the layout), press
+ *     A12 twice or SYNC once to re-anchor.
  *
- * Symbols that don't exist in the Russian layout (like { } & $ ~ @ ^) are
- * typed from the en symbol layer: on the ru base, the right MO thumb key
- * (&sym_en_hold) switches the OS to English ONCE for the whole hold,
- * momentaries the plain sym_en layer, and switches back on release. The
- * old per-symbol &en approach misfired when several symbols were typed
- * in a row (odd number of host switches -> layout left in English).
+ * Symbols that don't exist in the Russian layout ({ } & $ ~ @ ^): T7 on
+ * the ru layer enters the sym session (host SET to English, layer 4 —
+ * plain EN-position scancodes); T7 again exits (host SET back to
+ * Russian). Unlike the old per-symbol &en / per-hold toggle schemes,
+ * rapid or repeated T7 taps cannot break the parity: every press issues
+ * an absolute target, not a blind flip.
  *
  * Note: caps_word on the nav layer works for English; ZMK's Caps Word
  * can't capitalize Russian Б (it lives on the DOT key) — an RuEn-specific
@@ -77,21 +81,29 @@
         };
 
         /* HOST SETUP #2 (see CROSS_OS.md): which modifier held over the
-         * spacebar means "switch input source". It must be EXACTLY the
-         * modifier that &os_lang_tog sends below, because the morph reuses
-         * that key press: the physically held modifier and the one the macro
-         * emits combine into the chord the host sees.
-         *   Linux / Windows (Super+Space)  -> MOD_LGUI   (current)
-         *   macOS (Ctrl+Space)             -> MOD_LCTL
-         * Mixing them is the classic silent failure: hold Ctrl, morph sends
-         * Super+Space, host sees Ctrl+Super+Space and recognises nothing.
-         * The morph exists so that the gesture switches the layout *and* the
-         * keyboard layer; a plain space is sent otherwise. */
-        lg_space: lg_space {
+         * spacebar means "switch input source". With the absolute-anchor
+         * redesign the morph target is layer_ru/layer_en — each sets the
+         * host to a DEFINITE layout (Meta+Ctrl+1/2, KDE), so the held
+         * Super simply becomes part of the anchor chord:
+         *   KDE / Windows-anchored (current)  -> MOD_LGUI  (Super held)
+         *   macOS (Ctrl+Shift+1/2 anchors)    -> MOD_LCTL
+         * Two variants, one per base layer, so the space chord is also a
+         * definite target and never a blind toggle. A plain space is sent
+         * when no modifier is held. */
+        lg_space_en: lg_space_en {
             compatible = "zmk,behavior-mod-morph";
-            label = "LG_SPACE";
+            label = "LG_SPACE_EN";
             #binding-cells = <0>;
-            bindings = <&kp SPACE>, <&lg_tog>;
+            bindings = <&kp SPACE>, <&layer_ru>;
+
+            mods = <(MOD_LGUI)>;
+        };
+
+        lg_space_ru: lg_space_ru {
+            compatible = "zmk,behavior-mod-morph";
+            label = "LG_SPACE_RU";
+            #binding-cells = <0>;
+            bindings = <&kp SPACE>, <&layer_en>;
 
             mods = <(MOD_LGUI)>;
         };
@@ -164,16 +176,43 @@
             tap-ms = <30>;
         };
 
-        /* Ask the host to switch input source. Keyboard and OS layout both
-         * move one step, so the two stay in step as long as they started
-         * together (SYNC below repairs the pairing after an external change).
-         * macOS users: swap in <&os_next_mac> here and MOD_LCTL above. */
+        /* Ask the host to switch input source (RELATIVE "next"). After the
+         * absolute-anchor redesign this is a fallback used only by the
+         * Adjust-layer SYNC key — every normal path below sends a definite
+         * target instead. macOS users: swap in <&os_next_mac>. */
 
         os_lang_tog: os_lang_tog {
             compatible = "zmk,behavior-macro";
             label = "OS_LANG_TOG";
             #binding-cells = <0>;
             bindings = <&os_next_linux_win>; /* ← ACTIVE: the one line to change */
+            wait-ms = <0>;
+            tap-ms = <30>;
+        };
+
+        /* HOST SETUP #3 — the absolute anchors (KDE's "Select Keyboard
+         * Layout 1/2" actions, bound once in System Settings to
+         * Meta+Ctrl+1 / Meta+Ctrl+2; macOS's "Select the source 1/2"
+         * uses LS(LC(N1))/LS(LC(N2)) with Ctrl+Shift+1/2). Layout NUMBER
+         * = position in the host's input-source list: English FIRST,
+         * Russian SECOND. Every language action sends one of these two —
+         * idempotent, so a coalesced or repeated chord cannot drift the
+         * state, the last command always states the truth. */
+
+        os_sel_en: os_sel_en {
+            compatible = "zmk,behavior-macro";
+            label = "OS_SEL_EN";
+            #binding-cells = <0>;
+            bindings = <&kp LG(LC(N1))>; /* KDE/Windows anchors */
+            wait-ms = <0>;
+            tap-ms = <30>;
+        };
+
+        os_sel_ru: os_sel_ru {
+            compatible = "zmk,behavior-macro";
+            label = "OS_SEL_RU";
+            #binding-cells = <0>;
+            bindings = <&kp LG(LC(N2))>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
@@ -191,17 +230,16 @@
             tap-ms = <30>;
         };
 
-        /* A12 on the en layer: go to Russian. A12 on the ru layer: go to
-         * English. Because the binding comes from the layer that is currently
-         * active, "switch the OS once" is always the right amount — no state
-         * can be skipped or doubled, which is what made the old absolute
-         * "&to 1 + toggle" pair drift out of sync. */
+        /* A12 on each base layer, and the targets of the per-base
+         * spacebar morphs: set the KEYBOARD layer and the HOST layout to
+         * one definite target in a single action. Absolute on both sides,
+         * so no sequence of presses can land in a half-switched state. */
 
         layer_en: layer_en {
             compatible = "zmk,behavior-macro";
             label = "LAYER_EN";
             #binding-cells = <0>;
-            bindings = <&to 0 &os_lang_tog>;
+            bindings = <&to 0 &os_sel_en>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
@@ -210,66 +248,40 @@
             compatible = "zmk,behavior-macro";
             label = "LAYER_RU";
             #binding-cells = <0>;
-            bindings = <&to 1 &os_lang_tog>;
+            bindings = <&to 1 &os_sel_ru>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
 
-        /* The right MO thumb key while the ru base layer is active.
+        /* T7 while the ru base layer is active: enter the symbol
+         * SESSION — host SET to English, sticky layer 4 (EN-position
+         * symbol layout, see the sym_ru node). T7 again on layer 4 runs
+         * sym_exit: host SET back to Russian, back to the ru base.
          *
-         * The old design routed every host-dependent symbol on sym_ru
-         * through &en: each press cycled the OS layout to English and
-         * back with 150ms waits. Two presses in a row (or one press
-         * while the previous macro's return-switch was still settling)
-         * broke the parity and the OS stayed in the wrong layout —
-         * "holding T7 and typing makes the language switch".
-         *
-         * Now the hold itself owns the switch: entering the hold cycles
-         * the OS to English ONCE, momentaries the plain EN symbol layer
-         * (3), and leaving the hold cycles back after a settle wait.
-         * Every hold is exactly two host switches no matter what and
-         * how much you type inside it, so parity cannot drift. The RU
-         * letters that sym_ru used to place around the &en symbols are
-         * reachable from the ru base layer itself. */
-        sym_en_hold: sym_en_hold {
+         * Sticky (not momentary) on purpose: the two previous designs —
+         * per-symbol &en toggles, then a per-hold toggle pair — both
+         * died on repeated quick T7 taps, because a relative "next
+         * source" issued twice in a burst can be coalesced by the host
+         * into one switch and the parity is gone. Here every press
+         * states an absolute target instead; interleaving is harmless.
+         * Typing letters inside the session types Latin (the host is
+         * English) — that is the deal the session makes; exit is one
+         * thumb tap. */
+
+        sym_enter: sym_enter {
             compatible = "zmk,behavior-macro";
-            label = "SYM_EN_HOLD";
+            label = "SYM_ENTER";
             #binding-cells = <0>;
-            bindings =
-                <&os_lang_tog>,
-                <&macro_press &mo 3>,
-                <&macro_pause_for_release>,
-                <&macro_release &mo 3>,
-                <&macro_wait_time 150>,
-                <&os_lang_tog>;
+            bindings = <&os_sel_en &to 4>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
 
-        /* Parameterized: type an English-only symbol from the ru layer —
-         * switch OS to English, handle press/hold, switch back. */
-
-        en: en {
-            compatible = "zmk,behavior-macro-one-param";
-            label = "EN";
-            #binding-cells = <1>;
-            /* 150ms settles after each OS toggle: the input-source switch
-             * is asynchronous on the host, and without the waits the
-             * symbol scancode raced it and came out in the wrong layout
-             * ({ as Х, ~ as Ё, etc). Raise it if a slow host still races
-             * the switch; the wait only applies while typing from sym_ru. */
-            bindings =
-                <&os_lang_tog>,
-                <&macro_wait_time 150>,
-                <&macro_press>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER>,
-                <&macro_pause_for_release>,
-                <&macro_release>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER>,
-                <&macro_tap>,
-                <&macro_wait_time 150>,
-                <&os_lang_tog>;
-
+        sym_exit: sym_exit {
+            compatible = "zmk,behavior-macro";
+            label = "SYM_EXIT";
+            #binding-cells = <0>;
+            bindings = <&os_sel_ru &to 1>;
             wait-ms = <0>;
             tap-ms = <30>;
         };
@@ -283,7 +295,7 @@
 &gresc     &kp Q     &kp W      &kp E  &kp R      &kp T                    &kp Y      &kp U  &kp I      &kp O     &kp P     &layer_ru
 &kp TAB    &kp A     &kp S      &kp D  &kp F      &kp G                    &kp H      &kp J  &kp K      &kp L     &kp SEMI  &kp SQT
 &kp LSHFT  &kp Z     &kp X      &kp C  &kp V      &kp B  &trans  &trans    &kp N      &kp M  &kp COMMA  &kp DOT   &kp FSLH   &kp RSHFT
-&kp LALT   &kp LGUI  &kp LCTRL  &mo 2  &lg_space                           &kp ENTER  &mo 3  &kp BSPC   &kp LBKT  &kp RBKT
+&kp LALT   &kp LGUI  &kp LCTRL  &mo 2  &lg_space_en                          &kp ENTER  &mo 3  &kp BSPC   &kp LBKT  &kp RBKT
             >;
 
             display-name = "Base";
@@ -295,7 +307,7 @@
 &gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &layer_en
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
 &kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &kp FSLH                  &kp RSHFT
-&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space                                                 &kp ENTER           &sym_en_hold               &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
+&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space_ru                                                &kp ENTER           &sym_enter                 &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
             >;
         };
 
@@ -323,15 +335,16 @@
 
         sym_ru {
             display-name = "Symbols (Ru)";
-            /* LEGACY: not bound anymore — the ru layer's MO thumb key is
-             * &sym_en_hold now (EN context + layer 3), see the macro's
-             * comment. Kept as layer index 4 so every other layer number,
-             * the LED palette indices and CROSS_OS.md stay stable. */
+            /* The EN-context symbol SESSION entered from the ru base via
+             * T7 (&sym_enter): while this layer is active the host layout
+             * was SET to English, so the symbols are the same plain
+             * EN-position scancodes as sym_en. The T7 position carries
+             * &sym_exit (host SET back to Russian, return to ru base). */
             bindings = <
-&trans  &en AT    &en LT        &kp EQUAL     &en GT    &en GRAVE                    &en CARET  &kp RU_DQT  &kp UNDER    &en SQT   &trans    &trans
-&trans  &kp RU_BSLH  &kp LPAR   &kp MINUS     &kp RPAR  &kp PLUS                     &kp PRCNT  &en LBRC    &kp RU_SEMI  &en RBRC  &kp EXCL  &trans
-&none   &en HASH  &kp RU_ASTRK  &kp RU_COLON  &kp RU_FSLH  &none  &trans  &trans     &none      &en PIPE    &en TILDE    &en AMPS  &en DLLR  &none
-&trans  &trans    &trans        &mo 5         &trans                                 &trans     &trans      &trans       &trans    &trans
+&trans  &kp AT    &kp LT     &kp EQUAL  &kp GT    &kp GRAVE                    &kp CARET  &kp DQT   &kp UNDER  &kp SQT   &trans    &trans
+&trans  &kp BSLH  &kp LPAR   &kp MINUS  &kp RPAR  &kp PLUS                     &kp PRCNT  &kp LBRC  &kp SEMI   &kp RBRC  &kp EXCL  &trans
+&none   &kp HASH  &kp ASTRK  &kp COLON  &kp FSLH  &none      &trans  &trans    &none      &kp PIPE  &kp TILDE  &kp AMPS  &kp DLLR  &none
+&trans  &trans    &trans     &mo 5      &trans                                 &trans     &sym_exit &trans     &trans    &trans
             >;
         };
 

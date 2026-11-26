@@ -58,22 +58,25 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
 
 1. **Layout invariant:** ZMK `ru` base layer ON ⟺ OS keyboard layout
    Russian. Every action that changes the layer must change the OS input
-   source, and nothing else may change one of the two (`&os_lang_tog`,
-   `&layer_en`/`&layer_ru`, the `&lg_space` mod-morph, `&en` macro). The
-   keymap header comment documents why the switch keys are per-layer
-   bindings rather than a blind toggle.
-2. The RU layout remaps letters, so host shortcuts must use digits or
-   layout-independent keys; the host applies input-source switches
-   asynchronously, hence the 150 ms settle waits (`&sym_en_hold`,
-   `&en` legacy). When symbols are needed from the ru base, go through
-   `&sym_en_hold` — one EN context per hold, never per-symbol toggling:
-   overlapping `&en` macros break the layout parity.
+   source, and nothing else may change one of the two. After the 2026-11
+   redesign all normal paths are ABSOLUTE: `&os_sel_en` / `&os_sel_ru`
+   (host must have "select layout 1/2" bound to Meta+Ctrl+1/2 — KDE) and
+   the per-base spacebar morphs `&lg_space_en` / `&lg_space_ru`; the
+   symbol session (`&sym_enter` on layer 1 → layer 4, `&sym_exit` back)
+   sets the host both ways. Only Adjust→LANG and Adjust→SYNC are relative.
+   The keymap header comment documents the design — update it in the same
+   commit when the design changes.
+2. Host layout anchors are **digits, never letters** (`Meta+Ctrl+1/2`):
+   the RU layout remaps letters, which breaks letter-based chords. KDE
+   applies layout selection synchronously — the 150 ms settle waits are
+   only needed by relative "next source" cycling hosts (GNOME/Windows).
 
 ## Conventions
 
-- **Layer numbers are positional**: 0 en, 1 ru, 2 nav, 3 sym_en, 4 sym_ru,
-  5 adj, 6 pointing. They are also baked into the LED colors in
-  `config/k04_mini.conf` (`RGBLED_WIDGET_LAYER_*`): renumbering a layer
+- **Layer numbers are positional**: 0 en, 1 ru, 2 nav, 3 sym_en,
+  4 sym_ru (the EN-context symbol SESSION), 5 adj, 6 pointing. They are
+  also baked into the LED colors in `config/k04_mini.conf`
+  (`RGBLED_WIDGET_LAYER_*` — currently all white): renumbering a layer
   means fixing every `&mo`/`&lt`/`&to`/`layers = <N>` *and* the conf.
 - RU keycodes: use `keys_ru.h` symbols (`RU_CYRILLIC_*`, `RU_*`), never raw
   HID usage numbers.

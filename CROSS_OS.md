@@ -216,7 +216,9 @@ times. Two independent root causes, both fixed here:
    every 16 ms through ZMK sleep, and the always-lit white base LED at
    brightness 60. Fix = `patches/0001` + `patches/0002` (event-driven
    sleep-gated polling + dead-chip backoff — fork-and-apply, see
-   `patches/README.md`), `CONFIG_ZMK_IDLE_SLEEP_TIMEOUT` 10 min → 3 min,
+   `patches/README.md`), `CONFIG_ZMK_IDLE_SLEEP_TIMEOUT` 10 min → 3 min
+   → 1 h (the flashed 3-min firmware felt too eager in desk use; with
+   the polls now parked, the longer window costs little),
    `CONFIG_RGBLED_WIDGET_PERSISTENT_BRIGHTNESS` 60 → 40. A side effect of
    the fixes: after a split reconnect the right-half LED now re-lights on
    its own within ~5 s (the central re-pushes its color; the peripheral

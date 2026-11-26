@@ -34,8 +34,11 @@
  *     mouse, another keyboard or a system menu and the two drifted apart,
  *     MOUSE (&mo 6) reaches the pointing layer, and the outermost right
  *     thumb key (&k04_layer_led 0 2) toggles the always-lit white base light.
- *   - The status LED shows which language is active: white = English base,
- *     blue = Russian layer, so a drifted state is visible, not guessed.
+ *   - The status LED used to show the active language (white base /
+ *     blue ru layer); the per-layer colors were switched off by user
+ *     request — the LED now shows only the official battery/BT/connect
+ *     language. Layer↔OS sync is still the invariant above; if the two
+ *     drift apart, press SYNC on the Adjust layer.
  *
  * Symbols that don't exist in the Russian layout (like { } & $ ~ @ ^) are
  * typed through the parameterized `&en` macro: it switches the OS to

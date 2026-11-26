@@ -141,6 +141,38 @@ This is what upstream `k03_ruen.keymap` does.
   sym_ru did drift — pressing several symbols in a row left the host in
   English; the layer stays defined only to keep the layer indices stable.)
 
+## Pairing the second / third Bluetooth profile
+
+A BT profile is a bond slot on the *keyboard* side; one slot holds exactly
+one host. Slots 0–4 are the `BT_SEL` keys in the Adjust layer (top row,
+right side), `BT_CLR_ALL` (last key of that row) empties every slot.
+Selecting a slot shows its colour for 1 s: BT0 red, BT1 blue, BT2 yellow,
+BT3 green, BT4 magenta.
+
+1. From the Adjust layer press the `BT_SEL` of the slot you want to add.
+   If the slot has no bond, the keyboard drops the current host and
+   becomes discoverable (blue blink).
+2. Pair "K:04 Mini" from the new host. Blue blink → green 1 s = bonded
+   and connected.
+3. Later, `BT_SEL n` reconnects that slot's saved host (white flash while
+   reconnecting).
+
+Failure modes worth knowing about:
+
+* A slot already holding a bond **replaces** it if you pair a different
+  host into it — pair the new host into the *next empty slot*, and use
+  `BT_CLR_ALL` + full re-pairing only when the slot memory is suspect
+  (there is no per-slot clear key in the current keymap).
+* A host that paired against **older firmware** may keep the cached HID
+  report descriptor (the classic "touchpad sends nothing" cause on
+  Linux). Symptom: pairing succeeds but mouse reports are ignored by
+  that host. Fix: forget the device on the host, `BT_CLR_ALL` the slot,
+  re-pair.
+* The keyboard can usually serve two or three hosts concurrently per
+  radio, but each slot still remembers only one; the split link itself
+  occupies one radio connection, so leave at least one slot unused
+  before reporting "profile N will not connect at all".
+
 ## Touchpad
 
 `boards/shields/k04_mini/k04_mini_right.overlay` holds the device node.

@@ -6,6 +6,8 @@ manifest:
       url-base: https://github.com/fustopoke
     - name: arazyan
       url-base: https://github.com/arazyan
+    - name: urob
+      url-base: https://github.com/urob
   projects:
     # Revisions are pinned to exact commits, not branch names: the two
     # k04 forks below carry patches/ diffs applied on top of fustopoke
@@ -38,5 +40,12 @@ manifest:
     - name: zmk-smart-rgbled-widget
       remote: fustopoke
       revision: 08cc150489b02350ba9a8ba7de60b2157122ab2a # branch: k04-led-fixes
+    # Unicode input for the sym layer (&uc): lets the symbol layer type
+    # code points (Latin punctuation like @ { } ~) regardless of which OS
+    # layout is active, WITHOUT touching the layout — so T7 no longer has
+    # to switch language to be usable. UC_MODE_LINUX (Ctrl+Shift+U).
+    - name: zmk-unicode
+      remote: urob
+      revision: v0.3
   self:
     path: config

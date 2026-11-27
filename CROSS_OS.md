@@ -139,9 +139,11 @@ On macOS that means Ctrl+Shift+1/2 and `LS(LC(N1))/LS(LC(N2))` inside the
 
 ## Keeping the two states paired
 
-* **A12** (top-right, both base layers) — `&layer_en` / `&layer_ru`: one
-  action, two absolute sets — keyboard layer via `&to`, host layout via the
-  anchor shortcut. Nothing to drift.
+* **A12** (top-right, both base layers) — `&layer_en` / `&layer_ru`: sets
+  the keyboard layer via `&to` and flips the host one step with the
+  relative `Super+Space` (Switch 1). Because the binding comes from the
+  CURRENT base layer, one "next" is always the right step — no host setup,
+  no drift.
 * **Adjust → LANG** (`&lg_tog`) — layer-blind fallback: `&tog 1` + one
   relative host flip; reach for it only when you don't know which base is
   active.
@@ -152,18 +154,40 @@ On macOS that means Ctrl+Shift+1/2 and `LS(LC(N1))/LS(LC(N2))` inside the
   layers are colored (nav green, sym cyan, adj yellow), so drift is
   spotted by typing one letter: it comes out `й` instead of `q` or
   vice versa.
-* Symbols that do not exist in the Russian layout (`{ } [ ] @ # $ ^ & ~`)
-  live on the single **sym** layer (index 3). T7 momentaries it from
-  either base and does NOT touch the host by itself. While T7 is held, the
-  C-row end keys on the sym layer set the language explicitly: **T7+C1**
-  (left, the LSHFT position) = `&layer_ru` (host SET to Russian, base ru),
-  **T7+C12** (right, the RSHFT position) = `&layer_en` (host SET to
-  English, base en). So to type symbols from the Russian base: hold T7,
-  tap C12 once (context→EN), type the symbols, and when done hold T7 and
-  tap C1 to go back. Every command is absolute, so bursts cannot desync
-  keyboard and host. (The old schemes — per-symbol `&en` toggles, then a
-  per-hold toggle pair, then a sticky session — each raced or fought the
-  user's key layout; this is the agreed one.)
+
+## Unicode input (the symbol layer)
+
+The single **sym** layer (index 3) is entered by holding **T7** from either
+base and does NOT touch the OS layout. Every symbol is typed as a Unicode
+code point via the [`zmk-unicode`](https://github.com/urob/zmk-unicode)
+module (`&uc CP 0`, pinned in `config/west.yml`), so `@ { } [ ] ~ ^ & $`
+come out correctly whatever layout is active and with no layout switch.
+
+* **Why not the old T7+C1/C12 switches:** those called `&layer_*`, which
+  runs `&to` — and `&to` clears every momentary layer, so pressing a
+  switch while *holding* T7 dropped the symbol layer out from under you.
+  Unicode sidesteps the whole problem: the symbol layer never needs the
+  host in a particular layout, so it never switches one.
+* **Host requirement — an input method that accepts Ctrl+Shift+U:**
+  * **GNOME** (Debian box): works out of the box (IBus is default); test
+    in Gedit/Text Editor.
+  * **KDE Plasma**: needs an IBus/Fcitx5 IME running. If a symbol types
+    nothing or literally `4 0 Space`, install/enable IBus (or set the
+    `linux-key`/mode) — see `urob/zmk-unicode` README. Fcitx5 users may
+    need the "Unicode input" addon or switch the default mode.
+  * **Windows / macOS**: change `default-mode` to `UC_MODE_WIN_COMPOSE`
+    (needs WinCompose) / `UC_MODE_MACOS` (add "Unicode Hex Input"), or
+    bind `&uc UC_SET_WIN_COMPOSE` / `&uc UC_SET_MACOS` on a layer to
+    switch on the fly.
+* **Quick self-test:** open any text field, press a sym-layer key. A
+  correct glyph → IME is ready. Nothing → IME not running (Linux) or
+  wrong mode. A literal digit sequence → the mode's trigger key doesn't
+  match this OS; pick another `&uc` mode.
+
+To fall back to layout-tied scancodes instead (host *must* be English,
+faster, no IME needed), replace the `&uc CP 0` entries with the original
+`&kp AT &kp LBRC …`. The trade-off is that they only type right while the
+host is in the English layout.
 
 ## Pairing the second / third Bluetooth profile
 

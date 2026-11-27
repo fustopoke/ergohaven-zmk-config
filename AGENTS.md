@@ -63,17 +63,23 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
    stock GNOME/KDE/Windows shortcut, ZERO host setup). Parity is kept
    because the binding always comes from the CURRENT layer: A12 is
    `&layer_ru` on en and `&layer_en` on ru; the spacebar morphs
-   (`&lg_space_en` / `&lg_space_ru`) and the sym layer C-row ends (T7+C1,
-   T7+C12) reuse those same two macros. The absolute-anchor variant (KDE
-   "Select layout 1/2" → Meta+Ctrl+1/2) exists as an opt-in in CROSS_OS.md
-   but is NOT default because it requires the user to assign that shortcut.
-   Do not reintroduce automatic toggles on layer entry/exit — that is the
-   drift bug the user hit repeatedly; only explicit key presses may flip
-   the layout. Update the keymap header in the same commit as any change.
-2. Host layout shortcuts must survive the RU letter remap — use digits or
-   the layout-independent `Super+Space` (current). KDE applies layout
-   switches promptly; the `&en`-style per-symbol waits are gone because the
-   sym layer no longer touches the host automatically.
+   (`&lg_space_en` / `&lg_space_ru`) reuse those same two macros. The
+   absolute-anchor variant (KDE "Select layout 1/2" → Meta+Ctrl+1/2) exists
+   as an opt-in in CROSS_OS.md but is NOT default because it requires the
+   user to assign that shortcut. Do not reintroduce automatic toggles on
+   layer entry/exit — that is the drift bug the user hit repeatedly; only
+   explicit key presses may flip the layout. Update the keymap header in
+   the same commit as any change.
+2. **The sym layer types Unicode, never switches layout.** English-only
+   symbols are `&uc CP 0` (urob/zmk-unicode, UC_MODE_LINUX) so they come
+   out under any host layout with no switch. CRITICAL ZMK gotcha that this
+   avoids: **`&to` clears all momentary layers**, so a language switch (via
+   `&layer_*` → `&to`) bound on the held T7 symbol layer kills the layer
+   under the user's finger. Never bind `&to`/`&layer_*`/anything that runs
+   `&to` on a momentary layer's own keys.
+3. Host layout shortcuts must survive the RU letter remap — use digits or
+   the layout-independent `Super+Space` (current). No per-symbol layout
+   waits remain: the sym layer no longer touches the host.
 
 ## Conventions
 

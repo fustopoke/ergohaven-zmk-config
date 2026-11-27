@@ -94,18 +94,15 @@
         scroll;
 
         /* ---- scrolling direction ----
-         * The driver default on Y is "content tracks the fingers"
-         * ("natural" scrolling), which is the touchpad convention on
-         * macOS, GNOME and Windows 11. All three hosts ship a setting for
-         * it, so change it there rather than here and the same firmware
-         * stays right on every machine.
-         *
-         * Only if a host has no such setting and scrolling really runs the
-         * wrong way, uncomment one of these:
-         *
-         *     natural-scroll-y;    // Y: content moves against the fingers
-         *     natural-scroll-x;    // X: the default here is already natural
-         */
+         * Inverted in firmware at the user's explicit request (2026-11-27):
+         * their primary device runs a layout/scroller where the driver
+         * default felt backwards. Y is now "content moves against the
+         * fingers" (traditional). NOTE: this is one image for every host —
+         * on GNOME/Debian the natural-scroll checkbox now needs to be set
+         * the OPPOSITE way to what it was before to keep that machine
+         * feeling right. Flip it back here (delete the line) if the
+         * per-host setting route ever becomes preferable. */
+        natural-scroll-y;
 
         /* ---- signal conditioning (chip side, same on every OS) ----
          * bottom-beta: filtering at slow finger speeds. 0 = smoothest but

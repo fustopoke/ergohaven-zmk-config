@@ -58,18 +58,22 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
 
 1. **Layout invariant:** ZMK `ru` base layer ON ⟺ OS keyboard layout
    Russian. Every action that changes the layer must change the OS input
-   source, and nothing else may change one of the two. All normal paths
-   are ABSOLUTE: `&os_sel_en` / `&os_sel_ru` (host must have "select
-   layout 1/2" bound to Meta+Ctrl+1/2 — KDE) drive `&layer_en` /
-   `&layer_ru`, which A12, the per-base spacebar morphs (`&lg_space_en` /
-   `&lg_space_ru`) and the sym layer's C-row ends (T7+C1 = RU, T7+C12 =
-   EN) all bind to. Only Adjust→LANG and Adjust→SYNC are relative. The
-   keymap header comment documents the design — update it in the same
-   commit when the design changes.
-2. Host layout anchors are **digits, never letters** (`Meta+Ctrl+1/2`):
-   the RU layout remaps letters, which breaks letter-based chords. KDE
-   applies layout selection synchronously — the 150 ms settle waits are
-   only needed by relative "next source" cycling hosts (GNOME/Windows).
+   source, and nothing else may change one of the two. The shipping design
+   uses a single RELATIVE "next source" (`&os_lang_tog`, Super+Space — the
+   stock GNOME/KDE/Windows shortcut, ZERO host setup). Parity is kept
+   because the binding always comes from the CURRENT layer: A12 is
+   `&layer_ru` on en and `&layer_en` on ru; the spacebar morphs
+   (`&lg_space_en` / `&lg_space_ru`) and the sym layer C-row ends (T7+C1,
+   T7+C12) reuse those same two macros. The absolute-anchor variant (KDE
+   "Select layout 1/2" → Meta+Ctrl+1/2) exists as an opt-in in CROSS_OS.md
+   but is NOT default because it requires the user to assign that shortcut.
+   Do not reintroduce automatic toggles on layer entry/exit — that is the
+   drift bug the user hit repeatedly; only explicit key presses may flip
+   the layout. Update the keymap header in the same commit as any change.
+2. Host layout shortcuts must survive the RU letter remap — use digits or
+   the layout-independent `Super+Space` (current). KDE applies layout
+   switches promptly; the `&en`-style per-symbol waits are gone because the
+   sym layer no longer touches the host automatically.
 
 ## Conventions
 

@@ -35,37 +35,32 @@ language change. That does not work:
 There is no shortcut that is safe on all three hosts, so the config declares
 the shortcuts it uses in one place instead of firing several.
 
-## Primary mechanism — absolute anchors (2026-11 redesign)
+## Primary mechanism — relative "next source" (zero host setup)
 
-Every normal language action now sets a **definite target**: "select layout
-1 (English)" / "select layout 2 (Russian)" via `&os_sel_en` / `&os_sel_ru`
-in `config/k04_mini.keymap`, sending `Meta+Ctrl+1` / `Meta+Ctrl+2` — the
-same anchors the OP36 RuEn keymap uses. The relative "next source"
-shortcut survives only in the Adjust layer's SYNC/LANG.
+The shipping config switches the host with a single **Super+Space** "next
+input source" (`&os_lang_tog`), which is the out-of-the-box binding on
+GNOME, KDE and Windows — nothing has to be configured. Parity is kept by
+construction: every switch key lives on the layer that is currently
+active, so one "next" is always exactly the right step (on the en base
+A12 is `&layer_ru`, on the ru base it is `&layer_en`). The sym layer does
+not auto-switch anything anymore; its C1/C12 are just the same one-step
+switch keys.
 
-Why: a relative toggle loses parity the moment the host coalesces rapid
-key chords (repeated symbol-layer entries, A12 immediately followed by
-T7 — the "and now the language keeps switching" symptom). Absolute
-commands are idempotent; a lost or doubled intermediate cannot matter,
-the last command always states the truth.
+### Optional upgrade — absolute anchors (needs one KDE setting)
 
-One-time host setup:
+If the user ever sees residual drift from a host that coalesces rapid
+Super+Space (repeated bursts), the keymap can be switched to **definite**
+targets: bind "Select Keyboard Layout" to `Meta+Ctrl+1/2` in System
+Settings → Shortcuts → *Keyboard Layout* (English first, Russian second),
+then replace `&os_lang_tog` inside `layer_en`/`layer_ru` with `&kp
+LG(LC(N1))` (EN) / `&kp LG(LC(N2))` (RU). On macOS the equivalent is
+"Select the Input Source 1/2" at Ctrl+Shift+1/2 with `LS(LC(N1))/LS(LC(N2))`
+(upstream `k03_ruen.keymap` does this). Absolute commands are idempotent,
+but they only do anything once that shortcut is assigned — which is why
+this is **opt-in, not the default**. Windows/GNOME have no absolute
+selection, so they stay on the relative mechanism.
 
-* **KDE Plasma** (the user's primary host): System Settings → Shortcuts →
-  *Keyboard Layout* → assign **Meta+Ctrl+1** to "Select Keyboard Layout"
-  slot 1 and **Meta+Ctrl+2** to slot 2. The tray's layout list must be
-  English first, Russian second.
-* **macOS**: System Settings → Keyboard → Keyboard Shortcuts → Input →
-  "Select the Input Source 1/2" → Ctrl+Shift+1/2; change the `os_sel_*`
-  bindings to `LS(LC(N1))` / `LS(LC(N2))` (this is what upstream
-  `k03_ruen.keymap` does).
-* **Windows**: no built-in select-layout-N chord — either add one via
-  PowerToys Keyboard Manager, or stay on the relative scheme below for
-  that machine.
-* **GNOME**: also has no absolute selection; on GNOME the relative
-  "Switch 1" below remains the mechanism (and its two-sources-only rule).
-
-## Switch 1 — the relative shortcut (SYNC/LANG fallback, one line)
+## Switch 1 — the host shortcut (one line)
 
 `config/k04_mini.keymap`, in the `macros` block:
 
@@ -95,13 +90,12 @@ Pick one, rebuild, flash **both** halves.
 ## Switch 2 — the spacebar chord (one line)
 
 Holding the OS key and tapping space switches layout *and* layer together.
-Since the 2026-11 redesign there are two per-base mod-morphs —
-`&lg_space_en` on the en base (its morph target is `&layer_ru`) and
-`&lg_space_ru` on the ru base (target `&layer_en`) — so even the chord
-sets a definite target instead of blind-toggling. The modifier they watch
-has to be **exactly** the one the anchor shortcut carries (Super for the
-KDE `Meta+Ctrl+1/2` anchors; the morph adds its own copy of that modifier
-on top of the key you are holding):
+There are two per-base mod-morphs — `&lg_space_en` on the en base (its
+morph target is `&layer_ru`) and `&lg_space_ru` on the ru base (target
+`&layer_en`) — so the chord moves exactly one step and its direction is
+correct by layer construction, like A12. The modifier the morphs watch
+has to be **exactly** the one Switch 1 sends (the morph reuses the key
+you are physically holding — the macro adds its own copy on top):
 
 ```c
 mods = <(MOD_LGUI)>;   /* Linux / Windows — Super */

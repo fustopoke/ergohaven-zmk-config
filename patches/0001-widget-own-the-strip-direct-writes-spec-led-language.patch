@@ -1,7 +1,7 @@
-From 0eab399311a866ecc4366121527411136bd1ba4b Mon Sep 17 00:00:00 2001
+From eff2f9685fc67b3e0c9c5a61b0eabd1b43e1ef24 Mon Sep 17 00:00:00 2001
 From: arazyan <arazdatas@gmail.com>
 Date: Wed, 25 Nov 2026 17:43:42 +0300
-Subject: [PATCH] widget: own the strip, keep EXT_POWER on
+Subject: [PATCH 1/2] widget: own the strip, keep EXT_POWER on
 
 The LED went dark on every build that moved the WS2812 to SPIM2, so the
 strip is back on SPIM3 (the only instance the board leaves free) and
@@ -332,6 +332,136 @@ index f54c45d..cb97645 100644
      initialized = true;
      LOG_INF("K:04 status LED widget initialized");
      return 0;
+-- 
+2.56.1
+
+
+From 08cc150489b02350ba9a8ba7de60b2157122ab2a Mon Sep 17 00:00:00 2001
+From: Max <fustopoke@mail.ru>
+Date: Fri, 27 Nov 2026 22:02:02 +0300
+Subject: [PATCH 2/2] widget: fresh battery sample on ind_bat, never blink
+ black
+
+zmk_battery_state_of_charge() is a timer-fed cache that starts at 0;
+reading it during the battery-key blink made a half whose cache was not
+yet populated show battery_tier_color(0) = BLACK for the whole second.
+On the split peripheral this read as 'the right LED turns off while the
+left shows its charge, then lights up briefly afterwards' (the brief
+light was the next layer-color re-push resuming the normal display).
+
+- battery_level_fresh(): when the cache is 0, do one synchronous
+  sensor_sample_fetch_chan(GAUGE_STATE_OF_CHARGE) + channel_get - the
+  exact path app/src/battery.c uses internally.
+- Unknown after that (a genuinely flat cell) shows the RED tier instead
+  of black: the key always answers with a color.
+- Central additionally pushes the peripheral's tier (known via split
+  battery fetching) as a transient to the right half; index 8 = custom
+  battery orange is now accepted by the blink path, redundant pushes
+  dedupe against the peripheral's own matching blink.
+---
+ src/widget.c | 70 +++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/src/widget.c b/src/widget.c
+index cb97645..5e2b334 100644
+--- a/src/widget.c
++++ b/src/widget.c
+@@ -31,6 +31,7 @@
+ #include <zephyr/device.h>
+ #include <zephyr/devicetree.h>
+ #include <zephyr/drivers/led_strip.h>
++#include <zephyr/drivers/sensor.h>
+ #include <zephyr/init.h>
+ #include <zephyr/kernel.h>
+ 
+@@ -308,6 +309,13 @@ static void override_for(struct zmk_led_hsb c, uint16_t ms) {
+ }
+ 
+ void k04_status_led_blink_color(int8_t palette_idx) {
++    /* Index 8 is not part of the official palette: the widget uses it
++     * internally for the 21-40% battery tier (custom orange), and the
++     * central pushes it to the peripheral for the battery blink. */
++    if (palette_idx == 8) {
++        override_for((struct zmk_led_hsb){COLOR_ORANGE_H, 100, 100}, 1000);
++        return;
++    }
+     if (palette_idx >= 0 && palette_idx < 8) {
+         override_for(color_def[palette_idx], 1000);
+     }
+@@ -332,12 +340,72 @@ static struct zmk_led_hsb battery_tier_color(uint8_t level) {
+ }
+ 
+ #if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
++
++#if DT_HAS_CHOSEN(zmk_battery)
++static const struct device *const battery_dev = DEVICE_DT_GET(DT_CHOSEN(zmk_battery));
++
++/* ZMK's zmk_battery_state_of_charge() is a cache: a static that starts at
++ * 0 and is refreshed only by the report timer (every
++ * CONFIG_ZMK_BATTERY_REPORT_INTERVAL, first sample scheduled at init).
++ * Pressing the battery key early after boot — or on the split peripheral,
++ * whose reporting thread runs with less slack — used to read 0, and
++ * battery_tier_color(0) returned BLACK: the half looked like its LED had
++ * died for a second ("right half turns off during battery show, then
++ * briefly lights up after the left one finishes"). Do one synchronous
++ * sample through the sensor API instead when the cache is empty; this is
++ * exactly what app/src/battery.c's (static, unreachable) update path
++ * does. */
++static uint8_t battery_level_fresh(void) {
++    uint8_t level = zmk_battery_state_of_charge();
++    if (level > 0 || !device_is_ready(battery_dev)) {
++        return level;
++    }
++
++    if (sensor_sample_fetch_chan(battery_dev, SENSOR_CHAN_GAUGE_STATE_OF_CHARGE) != 0) {
++        return 0;
++    }
++    struct sensor_value sv;
++    if (sensor_channel_get(battery_dev, SENSOR_CHAN_GAUGE_STATE_OF_CHARGE, &sv) != 0) {
++        return 0;
++    }
++    if (sv.val1 < 0 || sv.val1 > 100) {
++        return 0;
++    }
++    return (uint8_t)sv.val1;
++}
++#else
++static uint8_t battery_level_fresh(void) { return zmk_battery_state_of_charge(); }
++#endif /* DT_HAS_CHOSEN(zmk_battery) */
++
+ void indicate_battery(void) {
+     /* One symmetric second of this half's own charge tier. The halves
+      * blink in parallel (GLOBAL-locality keymap behavior), so a second
+      * stage showing the peripheral's level on the central made the left
+      * LED visibly outlast the right one — dropped. */
+-    uint8_t level = zmk_battery_state_of_charge();
++    uint8_t level = battery_level_fresh();
++
++#if IS_CENTRAL && IS_ENABLED(CONFIG_ZMK_SPLIT)
++    /* Belt-and-braces for the right half: the central also knows the
++     * peripheral level (split battery fetching, enabled in k04_mini.conf)
++     * and pushes it as a transient second blink. If the peripheral's own
++     * read works this is the same colour and the dedupe makes it a
++     * no-op; if it reads 0, the right LED still shows its charge instead
++     * of going dark. */
++    uint8_t plevel = 0;
++    if (ZMK_SPLIT_CENTRAL_BATTERY_GET(0, &plevel) == 0 && plevel > 0) {
++        push_right(plevel <= 20   ? 1
++                   : plevel <= 40 ? 8 /* custom orange, handled below */
++                   : plevel <= 74 ? 3
++                                  : 2,
++                   1);
++    }
++#endif
++
++    /* Never render "unknown" as black: a flat or unmeasured battery shows
++     * as the red tier, so the key press always visibly answers. */
++    if (level == 0) {
++        level = 20;
++    }
+ 
+     override_color = battery_tier_color(level);
+     override_until = k_uptime_get() + 1000;
 -- 
 2.56.1
 

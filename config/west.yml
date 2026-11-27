@@ -2,6 +2,8 @@ manifest:
   remotes:
     - name: ergohaven
       url-base: https://github.com/ergohaven
+    - name: fustopoke
+      url-base: https://github.com/fustopoke
     - name: arazyan
       url-base: https://github.com/arazyan
   projects:
@@ -26,13 +28,15 @@ manifest:
       revision: de6cb7a1652bda3bc33228fc5a2d3f21da79d5bc # branch: k04-polling
     # Colored battery / BT profile / connection blinks on the onboard
     # WS2812 indicator LED (chosen zmk,underglow in the k04_mini shield).
-    # Personal fork of fustopoke's v0.3-compat branch with patches/0001
-    # applied via `git am` (frame dedupe, sleep gating, right-half color
-    # re-push, official 20% low-battery threshold); base 5fd554d.
-    # Rebase the patch onto upstream and bump this revision together,
+    # patches/0001 now lives directly on this fustopoke branch (base
+    # 5fd554d, applied via `git am`): frame dedupe + direct strip writes,
+    # sleep gating, right-half color re-push, official 20% low-battery
+    # threshold, plus the fresh-battery-sample fix that stops the right
+    # half blinking BLACK when its charge cache is still 0. Bump = amend
+    # the branch and move this SHA together with the regenerated patch,
     # see patches/README.md.
     - name: zmk-smart-rgbled-widget
-      remote: arazyan
-      revision: 0eab399311a866ecc4366121527411136bd1ba4b # branch: k04-led-fixes
+      remote: fustopoke
+      revision: 08cc150489b02350ba9a8ba7de60b2157122ab2a # branch: k04-led-fixes
   self:
     path: config

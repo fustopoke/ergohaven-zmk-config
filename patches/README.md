@@ -1,15 +1,21 @@
 # patches/ — fixes for the k04_mini external modules
 
 The two ZMK modules `config/west.yml` pulls for the K:04 Mini originate
-under `fustopoke` (no push access there). Each patch below is a `git am`
-diff against the exact upstream commit they are based on. They are
-**already applied**: `config/west.yml` pins the patched forks under
-`arazyan/` (created with `gh repo fork`, patches applied with `git am`,
-pushed). Together with the in-repo fixes (widget-owned strip on the
-only free SPI instance — see `boards/shields/k04_mini/k04_mini.dtsi` —
-sleep timeout, brightness) they address three failures: erratic status
-LED, random half disconnects, and the touchpad dying permanently after a
-few minutes.
+under `fustopoke`. Each patch below is a `git am` diff against the exact
+upstream commit it is based on, and they are **already applied**:
+
+* `zmk-smart-rgbled-widget` — the `k04-led-fixes` branch of the
+  `fustopoke` repo carries `0001` directly (we have push access there),
+  and `west.yml` pins that fustopoke SHA.
+* `zmk-driver-azoteq-iqs5xx` — `0002` is applied on a personal
+  `arazyan` fork (created with `gh repo fork`, `git am`, pushed),
+  because the k04 work was done from that account; `west.yml` pins that
+  fustopoke-base + patch SHA.
+
+Together with the in-repo fixes (widget-owned strip on the only free SPI
+instance — see `boards/shields/k04_mini/k04_mini.dtsi` — sleep timeout,
+brightness) they address three failures: erratic status LED, random half
+disconnects, and the touchpad dying permanently after a few minutes.
 
 ## What each patch fixes
 
@@ -63,26 +69,27 @@ few minutes.
 
 ## Current fork state (already wired into west.yml)
 
-- `arazyan/zmk-smart-rgbled-widget`, branch `k04-led-fixes` @ `0eab399`
-  (= `5fd554d` + `0001`) — pinned in `west.yml`.
+- `fustopoke/zmk-smart-rgbled-widget`, branch `k04-led-fixes` @ `08cc150`
+  (= `5fd554d` + `0001`, which now carries two commits: the strip/power
+  work and the fresh-battery-sample fix that stops a half blinking black
+  when its charge cache is still 0) — pinned in `west.yml` on the
+  fustopoke remote directly.
 - `arazyan/zmk-driver-azoteq-iqs5xx`, branch `k04-polling` @ `de6cb7a`
   (= upstream `2af5a3e` + `0002`) — pinned in `west.yml`.
 
 To reproduce from scratch or to recover a fork:
 
 ```sh
-# 1. Fork both repos under your GitHub account (no-op if they exist)
-gh repo fork fustopoke/zmk-smart-rgbled-widget --clone=false
-gh repo fork fustopoke/zmk-driver-azoteq-iqs5xx  --clone=false
-
-# 2. Clone, apply, push
-git clone https://github.com/<you>/zmk-smart-rgbled-widget
+# widget: own repo, no fork step needed
+git clone https://github.com/fustopoke/zmk-smart-rgbled-widget
 cd zmk-smart-rgbled-widget
 git checkout -b k04-led-fixes 5fd554d
 git am /path/to/this/repo/patches/0001-widget-own-the-strip-direct-writes-spec-led-language.patch
 git push -u origin k04-led-fixes
 cd ..
 
+# iqs5xx: fork under your account (no-op if it exists), then apply
+gh repo fork fustopoke/zmk-driver-azoteq-iqs5xx --clone=false
 git clone https://github.com/<you>/zmk-driver-azoteq-iqs5xx
 cd zmk-driver-azoteq-iqs5xx
 git checkout k04-polling

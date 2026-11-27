@@ -153,18 +153,23 @@ On macOS that means Ctrl+Shift+1/2 and `LS(LC(N1))/LS(LC(N2))` inside the
   active.
 * **Adjust → SYNC** (`&os_lang_tog`) — flips *only* the OS input source
   (relative). Use it when a mouse/system menu/second keyboard changed the
-  host layout behind the keyboard's back. The per-layer LED colors are
-  off (uniform white), so drift is spotted by typing one letter: it comes
-  out `й` instead of `q` or vice versa.
+  host layout behind the keyboard's back. The base en/ru layers share the
+  white LED color by design (language is not LED-encoded); the momentary
+  layers are colored (nav green, sym cyan, adj yellow), so drift is
+  spotted by typing one letter: it comes out `й` instead of `q` or
+  vice versa.
 * Symbols that do not exist in the Russian layout (`{ } [ ] @ # $ ^ & ~`)
-  live on the EN symbol layout. From the ru base, the right MO thumb key
-  enters a **session**: `&sym_enter` SETs the host to English (anchor) and
-  switches to layer 4, which repeats the plain EN symbol layout; the same
-  thumb position on layer 4 is `&sym_exit`, SETting the host back to
-  Russian and returning to ru. Sticky + absolute means repeated fast taps
-  cannot break parity — every press states a definite target. (The old
-  schemes — per-symbol `&en` toggles, then a per-hold toggle pair — both
-  raced on bursts; that was the "T7 keeps switching the language" bug.)
+  live on the single **sym** layer (index 3). T7 momentaries it from
+  either base and does NOT touch the host by itself. While T7 is held, the
+  C-row end keys on the sym layer set the language explicitly: **T7+C1**
+  (left, the LSHFT position) = `&layer_ru` (host SET to Russian, base ru),
+  **T7+C12** (right, the RSHFT position) = `&layer_en` (host SET to
+  English, base en). So to type symbols from the Russian base: hold T7,
+  tap C12 once (context→EN), type the symbols, and when done hold T7 and
+  tap C1 to go back. Every command is absolute, so bursts cannot desync
+  keyboard and host. (The old schemes — per-symbol `&en` toggles, then a
+  per-hold toggle pair, then a sticky session — each raced or fought the
+  user's key layout; this is the agreed one.)
 
 ## Pairing the second / third Bluetooth profile
 
@@ -232,7 +237,7 @@ Failure modes worth knowing about:
   is a one-line change in the `k04-polling` branch of the IQS5xx fork if you
   want it lighter.
 * **Mouse buttons**: the `pointing` layer was previously unreachable — no key
-  activated layer 6. Adjust → MOUSE (`&mo 6`) now brings it up, giving middle
+  activated layer 5. Adjust → MOUSE (`&mo 5`) now brings it up, giving middle
   and side buttons on the home-row fingers while held. The touchpad's own
   taps/scroll work on every layer regardless.
 

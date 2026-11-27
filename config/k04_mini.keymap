@@ -11,16 +11,11 @@
  *   1 ru      — base, Russian (OS layout: Russian; letters ride the OS
  *               translit automatically, symbol keys use RU_* aliases)
  *   2 nav     — navigation/numbers, shared between languages
- *   3 sym_en  — symbols, entered (momentary) from the en layer — the OS is
- *               already English there, so plain &kp scancodes
- *   4 sym_ru  — SYMBOL SESSION, entered from the ru layer via T7
- *               (&sym_enter): the host is *set* to layout 1 (English) for
- *               the whole session and this layer carries the same plain
- *               symbol layout as sym_en; the T7 position on it is
- *               &sym_exit, which *sets* the host back to layout 2
- *               (Russian) and returns to the ru base
- *   5 adj     — adjust (BT profiles, media, outputs, language keys)
- *   6 pointing — extra mouse buttons under the fingers while held
+ *   3 sym     — ONE EN-context symbol layer, momentary from BOTH bases
+ *               via T7; its C-row end keys are the language switches
+ *               (C1 = &layer_ru, C12 = &layer_en)
+ *   4 adj     — adjust (BT profiles, media, outputs, language keys)
+ *   5 pointing — extra mouse buttons under the fingers while held
  *
  * Language switching — ABSOLUTE anchors (one keymap, every OS):
  *   - The keyboard layer is the source of truth; every action that changes
@@ -40,19 +35,22 @@
  *   - Adjust layer: LANG (&lg_tog) still cycles "next source + tog layer"
  *     as a layer-blind fallback; SYNC (&os_lang_tog) flips ONLY the OS
  *     input source (relative escape hatch after an external change);
- *     MOUSE (&mo 6) reaches the pointing layer; the outermost right thumb
+ *     MOUSE (&mo 5) reaches the pointing layer; the outermost right thumb
  *     key (&k04_layer_led 0 2) toggles the always-lit white base light.
  *   - The status LED shows only the official battery/BT/connect language
  *     (per-layer colors were switched off by user request). If layer and
  *     OS ever drift apart (a foreign keyboard changed the layout), press
  *     A12 twice or SYNC once to re-anchor.
  *
- * Symbols that don't exist in the Russian layout ({ } & $ ~ @ ^): T7 on
- * the ru layer enters the sym session (host SET to English, layer 4 —
- * plain EN-position scancodes); T7 again exits (host SET back to
- * Russian). Unlike the old per-symbol &en / per-hold toggle schemes,
- * rapid or repeated T7 taps cannot break the parity: every press issues
- * an absolute target, not a blind flip.
+ * Symbols that don't exist in the Russian layout ({ } & $ ~ @ ^) are typed
+ * from the single sym layer: T7 momentaries it from either base WITHOUT
+ * touching the host, and the language for the symbols you type is set
+ * explicitly with the same hold — T7+C1 = switch to Russian, T7+C12 =
+ * switch to English (the C-row end keys on the sym layer). Host switching
+ * stays ABSOLUTE (KDE "select layout 1/2"), so repeated or burst taps
+ * cannot desync keyboard and host — the historical T7 drift bug in all
+ * its forms (per-symbol toggles, per-hold toggles, sticky sessions) came
+ * from relative "next source" commands being coalesced by the host.
  *
  * Note: caps_word on the nav layer works for English; ZMK's Caps Word
  * can't capitalize Russian Б (it lives on the DOT key) — an RuEn-specific
@@ -252,39 +250,6 @@
             wait-ms = <0>;
             tap-ms = <30>;
         };
-
-        /* T7 while the ru base layer is active: enter the symbol
-         * SESSION — host SET to English, sticky layer 4 (EN-position
-         * symbol layout, see the sym_ru node). T7 again on layer 4 runs
-         * sym_exit: host SET back to Russian, back to the ru base.
-         *
-         * Sticky (not momentary) on purpose: the two previous designs —
-         * per-symbol &en toggles, then a per-hold toggle pair — both
-         * died on repeated quick T7 taps, because a relative "next
-         * source" issued twice in a burst can be coalesced by the host
-         * into one switch and the parity is gone. Here every press
-         * states an absolute target instead; interleaving is harmless.
-         * Typing letters inside the session types Latin (the host is
-         * English) — that is the deal the session makes; exit is one
-         * thumb tap. */
-
-        sym_enter: sym_enter {
-            compatible = "zmk,behavior-macro";
-            label = "SYM_ENTER";
-            #binding-cells = <0>;
-            bindings = <&os_sel_en &to 4>;
-            wait-ms = <0>;
-            tap-ms = <30>;
-        };
-
-        sym_exit: sym_exit {
-            compatible = "zmk,behavior-macro";
-            label = "SYM_EXIT";
-            #binding-cells = <0>;
-            bindings = <&os_sel_ru &to 1>;
-            wait-ms = <0>;
-            tap-ms = <30>;
-        };
     };
 
     keymap {
@@ -307,7 +272,7 @@
 &gresc     &kp RU_CYRILLIC_SHORT_I  &kp RU_CYRILLIC_TSE   &kp RU_CYRILLIC_U   &kp RU_CYRILLIC_KA  &kp RU_CYRILLIC_IE                    &kp RU_CYRILLIC_EN  &kp RU_CYRILLIC_GHE        &kp RU_CYRILLIC_SHA  &kp RU_CYRILLIC_SHCHA  &kp RU_CYRILLIC_ZE         &layer_en
 &kp TAB    &kp RU_CYRILLIC_EF       &kp RU_CYRILLIC_YERU  &kp RU_CYRILLIC_VE  &kp RU_CYRILLIC_A   &kp RU_CYRILLIC_PE                    &kp RU_CYRILLIC_ER  &kp RU_CYRILLIC_O          &kp RU_CYRILLIC_EL   &kp RU_CYRILLIC_DE     &kp RU_CYRILLIC_ZHE        &kp RU_CYRILLIC_E
 &kp LSHFT  &kp RU_CYRILLIC_YA       &kp RU_CYRILLIC_CHE   &kp RU_CYRILLIC_ES  &kp RU_CYRILLIC_EM  &kp RU_CYRILLIC_I   &trans  &trans    &kp RU_CYRILLIC_TE  &kp RU_CYRILLIC_SOFT_SIGN  &kp RU_CYRILLIC_BE         &kp RU_CYRILLIC_YU             &kp FSLH                  &kp RSHFT
-&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space_ru                                                &kp ENTER           &sym_enter                 &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
+&kp LALT   &kp LGUI                 &kp LCTRL             &mo 2               &lg_space_ru                                                &kp ENTER           &mo 3                    &kp BSPC             &kp RU_CYRILLIC_HA     &kp RU_CYRILLIC_HARD_SIGN
             >;
         };
 
@@ -316,43 +281,37 @@
 &trans     &kp N1     &kp N2   &kp N3   &kp N4   &kp N5                       &kp N6  &kp N7    &kp N8  &kp N9    &kp N0      &kp MINUS
 &trans     &kp HOME   &kp INS  &kp DEL  &kp END  &kp RET                      &trans  &kp LEFT  &kp UP  &kp DOWN  &kp RIGHT   &trans
 &trans     &trans     &trans   &trans   &trans   &kp PSCRN  &trans  &trans    &trans  &trans    &trans  &trans    &trans      &trans
-&kp PG_UP  &kp PG_DN  &trans   &trans   &trans                                &trans  &mo 5     &trans  &kp CAPS  &caps_word
+&kp PG_UP  &kp PG_DN  &trans   &trans   &trans                                &trans  &mo 4     &trans  &kp CAPS  &caps_word
             >;
 
             display-name = "Nav";
         };
 
-        sym_en {
+        sym {
             bindings = <
 &trans  &kp AT    &kp LT     &kp EQUAL  &kp GT    &kp GRAVE                    &kp CARET  &kp DQT   &kp UNDER  &kp SQT   &trans    &trans
 &trans  &kp BSLH  &kp LPAR   &kp MINUS  &kp RPAR  &kp PLUS                     &kp PRCNT  &kp LBRC  &kp SEMI   &kp RBRC  &kp EXCL  &trans
-&none   &kp HASH  &kp ASTRK  &kp COLON  &kp FSLH  &none      &trans  &trans    &none      &kp PIPE  &kp TILDE  &kp AMPS  &kp DLLR  &none
-&trans  &trans    &trans     &mo 5      &trans                                 &trans     &trans    &trans     &trans    &trans
+&layer_ru &kp HASH &kp ASTRK  &kp COLON  &kp FSLH  &none      &trans  &trans    &none      &kp PIPE  &kp TILDE  &kp AMPS  &kp DLLR  &layer_en
+&trans  &trans    &trans     &mo 4      &trans                                 &trans     &trans    &trans     &trans    &trans
             >;
+
+            /* One EN-context symbol layout for BOTH bases (the old 3/4
+             * split is gone by user request). T7 momentaries it from the
+             * en and the ru base alike; while it is held, the C-row end
+             * keys (C1 = left shift position, C12 = right shift
+             * position) are the language switches: T7+C1 sets Russian,
+             * T7+C12 sets English. Symbols need the host English —
+             * switching to the EN context here is deliberate and
+             * manual, not a hidden side effect of the hold. */
 
             display-name = "Symbols";
-        };
-
-        sym_ru {
-            display-name = "Symbols (Ru)";
-            /* The EN-context symbol SESSION entered from the ru base via
-             * T7 (&sym_enter): while this layer is active the host layout
-             * was SET to English, so the symbols are the same plain
-             * EN-position scancodes as sym_en. The T7 position carries
-             * &sym_exit (host SET back to Russian, return to ru base). */
-            bindings = <
-&trans  &kp AT    &kp LT     &kp EQUAL  &kp GT    &kp GRAVE                    &kp CARET  &kp DQT   &kp UNDER  &kp SQT   &trans    &trans
-&trans  &kp BSLH  &kp LPAR   &kp MINUS  &kp RPAR  &kp PLUS                     &kp PRCNT  &kp LBRC  &kp SEMI   &kp RBRC  &kp EXCL  &trans
-&none   &kp HASH  &kp ASTRK  &kp COLON  &kp FSLH  &none      &trans  &trans    &none      &kp PIPE  &kp TILDE  &kp AMPS  &kp DLLR  &none
-&trans  &trans    &trans     &mo 5      &trans                                 &trans     &sym_exit &trans     &trans    &trans
-            >;
         };
 
         adj {
             bindings = <
 &bootloader  &trans  &kp F1  &kp F2   &kp F3   &kp F4                     &bt BT_SEL 0  &bt BT_SEL 1  &bt BT_SEL 2      &bt BT_SEL 3  &bt BT_SEL 4  &bt BT_CLR_ALL
 &trans       &trans  &kp F5  &kp F6   &kp F7   &kp F8                     &out OUT_BLE  &kp C_VOL_DN  &kp C_MUTE        &kp C_VOL_UP  &lg_tog       &os_lang_tog
-&trans       &trans  &kp F9  &kp F10  &kp F11  &kp F12  &trans  &trans    &out OUT_USB  &kp C_PREV    &kp C_PLAY_PAUSE  &kp C_NEXT    &mo 6               &ind_bat
+&trans       &trans  &kp F9  &kp F10  &kp F11  &kp F12  &trans  &trans    &out OUT_USB  &kp C_PREV    &kp C_PLAY_PAUSE  &kp C_NEXT    &mo 5               &ind_bat
 &trans       &trans  &trans  &trans   &trans                              &trans        &trans        &trans            &trans        &k04_layer_led 0 2
             >;
 

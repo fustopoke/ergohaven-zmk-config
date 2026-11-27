@@ -58,13 +58,13 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
 
 1. **Layout invariant:** ZMK `ru` base layer ON ⟺ OS keyboard layout
    Russian. Every action that changes the layer must change the OS input
-   source, and nothing else may change one of the two. After the 2026-11
-   redesign all normal paths are ABSOLUTE: `&os_sel_en` / `&os_sel_ru`
-   (host must have "select layout 1/2" bound to Meta+Ctrl+1/2 — KDE) and
-   the per-base spacebar morphs `&lg_space_en` / `&lg_space_ru`; the
-   symbol session (`&sym_enter` on layer 1 → layer 4, `&sym_exit` back)
-   sets the host both ways. Only Adjust→LANG and Adjust→SYNC are relative.
-   The keymap header comment documents the design — update it in the same
+   source, and nothing else may change one of the two. All normal paths
+   are ABSOLUTE: `&os_sel_en` / `&os_sel_ru` (host must have "select
+   layout 1/2" bound to Meta+Ctrl+1/2 — KDE) drive `&layer_en` /
+   `&layer_ru`, which A12, the per-base spacebar morphs (`&lg_space_en` /
+   `&lg_space_ru`) and the sym layer's C-row ends (T7+C1 = RU, T7+C12 =
+   EN) all bind to. Only Adjust→LANG and Adjust→SYNC are relative. The
+   keymap header comment documents the design — update it in the same
    commit when the design changes.
 2. Host layout anchors are **digits, never letters** (`Meta+Ctrl+1/2`):
    the RU layout remaps letters, which breaks letter-based chords. KDE
@@ -73,11 +73,12 @@ devicetree (`boards/shields/k04_mini/`) edits plus `build.yaml`.
 
 ## Conventions
 
-- **Layer numbers are positional**: 0 en, 1 ru, 2 nav, 3 sym_en,
-  4 sym_ru (the EN-context symbol SESSION), 5 adj, 6 pointing. They are
-  also baked into the LED colors in `config/k04_mini.conf`
-  (`RGBLED_WIDGET_LAYER_*` — currently all white): renumbering a layer
-  means fixing every `&mo`/`&lt`/`&to`/`layers = <N>` *and* the conf.
+- **Layer numbers are positional**: 0 en, 1 ru, 2 nav, 3 sym (single
+  EN-context symbol layer, the old 3/4 split is merged), 4 adj, 5
+  pointing. They are also baked into the LED colors in
+  `config/k04_mini.conf` (`RGBLED_WIDGET_LAYER_*` — base en/ru white,
+  momentary layers distinct): renumbering a layer means fixing every
+  `&mo`/`&lt`/`&to`/`layers = <N>` *and* the conf.
 - RU keycodes: use `keys_ru.h` symbols (`RU_CYRILLIC_*`, `RU_*`), never raw
   HID usage numbers.
 - Commits: short imperative subject; `k04 mini:` prefix for firmware
